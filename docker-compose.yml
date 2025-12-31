@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  frontend:
+    build: ./Frontend
+    container_name: sun_frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./Backend
+    container_name: sun_backend
+    ports:
+      - "9000:9000"
+    environment:
+      AI_MODEL_URL: "http://model:8080"
+    depends_on:
+      - model
+
+  model:
+    build: ./Model
+    container_name: sun_model
+    ports:
+      - "8080:8080"

@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Docker Compose Up",
+            "type": "docker",
+            "request": "launch",
+            "platform": "node", 
+            "dockerCompose": {
+                "up": {
+                    "files": [
+                        "${workspaceFolder}/docker-compose.yml"
+                    ]
+                }
+            }
+        }
+    ]
+}

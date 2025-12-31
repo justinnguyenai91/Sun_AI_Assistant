@@ -1,0 +1,13 @@
+[Unit]
+Description=Sun Gateway
+After=network.target
+
+[Service]
+User=dthaus
+WorkingDirectory=/home/dthaus/Sun/Backend
+EnvironmentFile=/home/dthaus/Sun/Backend/.env
+ExecStart=/usr/bin/uvicorn app:app --host 0.0.0.0 --port 9000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+# Python rác
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node rác
+node_modules/
+dist/
+
+# Docker rác
+.data/
+
+# Model AI (Vì GitHub không cho upload file >100MB)
+*.gguf
