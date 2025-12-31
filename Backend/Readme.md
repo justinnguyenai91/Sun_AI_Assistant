@@ -1,1 +1,1 @@
-Make AI Project: Chatbox
+Make AI Project: Chatbox for Learning
