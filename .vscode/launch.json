@@ -1,18 +1,32 @@
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Docker Compose Up",
+//             "type": "docker",
+//             "request": "launch",
+//             "platform": "node", 
+//             "dockerCompose": {
+//                 "up": {
+//                     "files": [
+//                         "${workspaceFolder}/docker-compose.yml"
+//                     ]
+//                 }
+//             }
+//         }
+//     ]
+// }
+
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Docker Compose Up",
-            "type": "docker",
-            "request": "launch",
-            "platform": "node", 
-            "dockerCompose": {
-                "up": {
-                    "files": [
-                        "${workspaceFolder}/docker-compose.yml"
-                    ]
-                }
-            }
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Lesson 5",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/lesson5/cli.py",
+      "args": ["--input", "sample.csv"],
+      "cwd": "${workspaceFolder}/lesson5"
+    }
+  ]
 }

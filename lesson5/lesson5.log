@@ -1,0 +1,4 @@
+2026-01-02 18:27:40,016 - INFO - Lesson 5 CLI started
+2026-01-02 18:27:40,022 - INFO - Summary result: {'rows': 3, 'columns': ['id', 'value', 'remark']}
+2026-01-02 18:27:57,556 - INFO - Lesson 5 CLI started
+2026-01-02 18:27:57,559 - INFO - Summary result: {'rows': 3, 'columns': ['id', 'value', 'remark']}
