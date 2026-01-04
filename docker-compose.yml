@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   frontend:
     build: ./Frontend
@@ -14,13 +12,24 @@ services:
     container_name: sun_backend
     ports:
       - "9000:9000"
-    environment:
-      AI_MODEL_URL: "http://model:8080"
+    env_file:
+      - ./Backend/.env.docker
+    volumes:
+      - ./Backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 9000 --reload
     depends_on:
       - model
 
   model:
-    build: ./Model
+    image: ghcr.io/ggml-org/llama.cpp:full
     container_name: sun_model
     ports:
       - "8080:8080"
+    volumes:
+      - ./Model:/models
+    command: >
+      --server
+      -m /models/qwen2-7b-instruct-q4_k_m.gguf
+      --host 0.0.0.0
+      --port 8080
+      -c 4096

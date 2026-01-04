@@ -1,48 +1,73 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import requests
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from api.ai_query import router as ai_router
+from ai.prompt_template import build_planner_prompt
+from ai.call_llm import call_llm
+from ai.decision_parser import parse_ai_response
+from llama_service import query_llama
 
 app = FastAPI()
 
-# Cho phép frontend (React) truy cập backend
+# ===== Models =====
+
+class PlannerRequest(BaseModel):
+    question: str
+    source: str | None = None
+    explain: bool = False
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+# ===== Middleware =====
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tạm cho phép tất cả, có thể đổi thành ["http://localhost:5173"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ===== Chat API (giữ nguyên cho frontend) =====
 
-# Dữ liệu đầu vào từ frontend
-class ChatRequest(BaseModel):
-    message: str
-
-
-# API chat
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
-    user_message = request.message  # Lấy dữ liệu người dùng gửi lên
-
-    # gửi đến model Qwen (llama-server đang chạy tại port 8080)
-    payload = {
-        "model": "qwen2-7b",
-        "messages": [
-            {"role": "system", "content": "Bạn là trợ lý AI thông minh, giao tiếp tự nhiên, và ưu tiên giải thích rõ ràng, dễ hiểu."},
-            {"role": "user", "content": user_message}
-        ],
-        "temperature": 0.7,   # kiểm soát độ sáng tạo
-        "top_p": 0.9,         # kiểm soát độ ngẫu nhiên
-        "max_tokens": 512     # tránh bị cắt câu
+    return {
+        "error": "Chat endpoint is not used in Lesson 6 planner"
     }
 
-    response = requests.post("http://model:8080/v1/chat/completions", json=payload)
 
-    if response.status_code == 200:
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        return {"reply": content}
-    else:
-        return {"error": response.text}
+# ===== Planner API (CORE of Lesson 6) =====
+
+@app.post("/planner")
+async def planner_endpoint(request: PlannerRequest):
+    try:
+        # 1. Build strict prompt
+        prompt = build_planner_prompt(request.question)
+
+        # 2. Call LLM (local, internal)
+        llm_output = query_llama(prompt)
+        print("=== RAW LLM OUTPUT ===")
+        print(llm_output)
+        print("======================")
+        # 3. Parse + validate JSON instruction
+        decision = parse_ai_response(llm_output)
+
+        return {
+            "decision": decision
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+
+
+app = FastAPI()
+
+app.include_router(ai_router)
