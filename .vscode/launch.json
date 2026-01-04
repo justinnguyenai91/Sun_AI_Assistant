@@ -17,16 +17,35 @@
 //     ]
 // }
 
+// {
+//   "version": "0.2.0",
+//   "configurations": [
+//     {
+//       "name": "Run Lesson 5",
+//       "type": "python",
+//       "request": "launch",
+//       "program": "${workspaceFolder}/lesson5/cli.py",
+//       "args": ["--input", "sample.csv"],
+//       "cwd": "${workspaceFolder}/lesson5"
+//     }
+//   ]
+// }
+
 {
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Lesson 5",
+      "name": "Lesson6 CLI",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/lesson5/cli.py",
-      "args": ["--input", "sample.csv"],
-      "cwd": "${workspaceFolder}/lesson5"
+      "program": "${workspaceFolder}/lesson6/cli.py",
+      "args": [
+        "--source", "csv",
+        "--file", "lesson6/sample.csv",
+        "--question", "Top 3 products by revenue",
+        "--dry-run"
+      ],
+      "console": "integratedTerminal"
     }
   ]
 }

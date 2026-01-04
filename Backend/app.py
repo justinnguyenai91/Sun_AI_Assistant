@@ -7,7 +7,10 @@ from .settings import settings
 from .security import attach_cors, require_bearer
 from .middlewares import RequestIDMiddleware, limiter
 from slowapi.errors import RateLimitExceeded
-
+from planner.rule_planner import plan
+from data_engine.engine import DataEngine
+from decision.decision_schema import Decision
+from flask import request, jsonify
 
 # chọn adapter
 from .adapters import llama_client, ollama_client
@@ -53,3 +56,29 @@ async def chat(request: Request, body: ChatRequest, authorization: str | None = 
         return data
 from slowapi.util import get_remote_address
 
+
+
+@app.route("/ai/query", methods=["POST"])
+def ai_query():
+    try:
+        body = request.get_json()
+        question = body.get("question") if body else None
+
+        if not question:
+            return jsonify({"error": "question is required"}), 400
+
+        decision = plan(question)
+        engine = DataEngine()
+        result = engine.execute(decision)
+
+        return jsonify({
+            "decision": decision.dict(),
+            "result": result
+        })
+
+    except Exception as e:
+        # log ra console để docker logs thấy
+        print("ERROR in /ai/query:", str(e))
+        return jsonify({
+            "error": str(e)
+        }), 500

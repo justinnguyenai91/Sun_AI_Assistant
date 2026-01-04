@@ -1,0 +1,16 @@
+order_id,order_date,product,category,quantity,sales,revenue
+1,2025-01-05,Product A,Electronics,10,125000,1250000
+2,2025-01-06,Product B,Electronics,5,98000,490000
+3,2025-01-07,Product C,Home,20,45000,900000
+4,2025-01-08,Product A,Electronics,7,125000,875000
+5,2025-01-10,Product D,Home,15,30000,450000
+6,2025-02-02,Product B,Electronics,8,98000,784000
+7,2025-02-05,Product C,Home,12,45000,540000
+8,2025-02-10,Product A,Electronics,6,125000,750000
+9,2025-02-15,Product D,Home,25,30000,750000
+10,2025-02-18,Product E,Office,30,20000,600000
+11,2025-03-01,Product A,Electronics,4,125000,500000
+12,2025-03-03,Product B,Electronics,10,98000,980000
+13,2025-03-05,Product C,Home,18,45000,810000
+14,2025-03-07,Product E,Office,20,20000,400000
+15,2025-03-10,Product D,Home,12,30000,360000
