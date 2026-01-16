@@ -159,12 +159,45 @@ class Planner:
         self.decision_engine = decision_engine
         self.data_adapter = data_adapter
 
+    @staticmethod
+    def _redact_for_log(obj: Any) -> Any:
+        """Best-effort redaction for logs (never include tokens)."""
+        try:
+            if isinstance(obj, dict):
+                out: Dict[str, Any] = {}
+                for k, v in obj.items():
+                    key = str(k)
+                    key_lc = key.lower()
+
+                    # Always redact auth blocks.
+                    if key_lc == "auth":
+                        out[key] = {"redacted": True}
+                        continue
+
+                    # Common token keys (context or otherwise).
+                    if key_lc in ("mestoken", "mes_token", "externalapitoken", "external_api_token", "token"):
+                        out[key] = "***"
+                        continue
+
+                    if isinstance(v, dict):
+                        out[key] = Planner._redact_for_log(v)
+                    elif isinstance(v, list):
+                        out[key] = [Planner._redact_for_log(x) for x in v]
+                    else:
+                        out[key] = v
+                return out
+            if isinstance(obj, list):
+                return [Planner._redact_for_log(x) for x in obj]
+        except Exception:
+            return {"redacted": True}
+        return obj
+
     async def execute(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """
         Main orchestration entrypoint.
         """
 
-        logger.info("Planner.start", extra={"request": request})
+        logger.info("Planner.start", extra={"request": self._redact_for_log(request)})
 
         # Multi-factory execution: run the same request per factory and merge.
         ctx = request.get("context") if isinstance(request, dict) else None
@@ -290,7 +323,11 @@ class Planner:
         # The response phase can infer variables mapping from depends_on if not supplied.
         formula_specs = [{"metric": cm} for cm in computed_metrics]
 
-        return {
+        auth = execution_plan.get("auth")
+        if not isinstance(auth, dict) or not auth:
+            auth = None
+
+        out = {
             "type": "computed",
             "entity": execution_plan.get("entity"),
             "action": execution_plan.get("action"),
@@ -303,6 +340,11 @@ class Planner:
             "viz": execution_plan.get("viz") or "table",
         }
 
+        if auth:
+            out["auth"] = auth
+
+        return out
+
     # ------------------------------------------------------------------
     # Internal phases (kept explicit for debuggability)
     # ------------------------------------------------------------------
@@ -310,13 +352,13 @@ class Planner:
     def _semantic_phase(self, request: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug("Planner.semantic.start")
         result = self.semantic_resolver.resolve(request)
-        logger.debug("Planner.semantic.done", extra={"semantic_plan": result})
+        logger.debug("Planner.semantic.done", extra={"semantic_plan": self._redact_for_log(result)})
         return result
 
     def _decision_phase(self, semantic_plan: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug("Planner.decision.start")
         result = self.decision_engine.decide(semantic_plan)
-        logger.debug("Planner.decision.done", extra={"execution_plan": result})
+        logger.debug("Planner.decision.done", extra={"execution_plan": self._redact_for_log(result)})
         return result
 
     async def _data_phase(self, execution_plan: Dict[str, Any]):
@@ -346,6 +388,9 @@ class Planner:
                         "filters": dict(execution_plan.get("filters") or {}),
                         "metrics": [str(step_metric)],
                     }
+                    auth = execution_plan.get("auth")
+                    if isinstance(auth, dict) and auth:
+                        subplan["auth"] = auth
                     try:
                         from .query_builder import QueryBuilder
 
@@ -368,6 +413,9 @@ class Planner:
                     "metrics": None,
                     "template_id": tid,
                 }
+                auth = execution_plan.get("auth")
+                if isinstance(auth, dict) and auth:
+                    subplan["auth"] = auth
                 # Let QueryBuilder enrich method/endpoint/query mapping
                 try:
                     from .query_builder import QueryBuilder

@@ -83,6 +83,11 @@ class DecisionEngine:
             "metrics": metrics,
         }
 
+        # Auth is not a filter; keep it separate to avoid leaking to query params/logging.
+        auth = semantic_plan.get("auth")
+        if isinstance(auth, dict) and auth:
+            plan["auth"] = auth
+
         qb = QueryBuilder()
         plan = qb.build(plan)
 

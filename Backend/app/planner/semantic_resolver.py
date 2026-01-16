@@ -17,6 +17,7 @@ class SemanticResolver:
         registry = get_registry()
 
         params: Dict[str, Any] = {}
+        auth: Dict[str, Any] = {}
 
         # ------------------------------------------------------------
         # KPI/metric selection (config-driven)
@@ -60,6 +61,18 @@ class SemanticResolver:
                 if k in ctx and ctx.get(k) is not None:
                     # do not override values extracted from text
                     params.setdefault(k, ctx.get(k))
+
+            # Per-request MES token support (service mode).
+            # Keep this out of params/filters to avoid leaking to logs or query params.
+            token = (
+                ctx.get("mesToken")
+                or ctx.get("mes_token")
+                or ctx.get("externalApiToken")
+                or ctx.get("external_api_token")
+                or ctx.get("externalApiBearer")
+            )
+            if isinstance(token, str) and token.strip():
+                auth["mes_token"] = token.strip()
 
         # Allow inline mention in text (e.g., "FAC01", "DJVN1")
         if "factoryCode" not in params:
@@ -232,9 +245,12 @@ class SemanticResolver:
         if sort_field:
             params["order_by"] = {"field": sort_field, "direction": sort_dir or "desc"}
 
-        return {
+        out = {
             "intent": intent.get("intent"),
             "entity": intent.get("entity"),
             "raw_query": raw,
             "params": params,
         }
+        if auth:
+            out["auth"] = auth
+        return out

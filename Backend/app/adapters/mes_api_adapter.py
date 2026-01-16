@@ -161,7 +161,20 @@ class ApiDataAdapter:
     async def execute(self, execution_plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         logger = logging.getLogger(__name__)
         headers = {"Accept": "application/json"}
-        if self.bearer:
+
+        # Per-request token override (service mode): MES calls chatbox and supplies a token.
+        bearer = None
+        auth = execution_plan.get("auth") if isinstance(execution_plan, dict) else None
+        if isinstance(auth, dict):
+            bearer = auth.get("mes_token") or auth.get("token")
+        if isinstance(bearer, str) and bearer.strip():
+            bearer = bearer.strip()
+            # Allow passing full "Bearer <token>" or raw token.
+            if bearer.lower().startswith("bearer "):
+                headers["Authorization"] = bearer
+            else:
+                headers["Authorization"] = f"Bearer {bearer}"
+        elif self.bearer:
             headers["Authorization"] = f"Bearer {self.bearer}"
 
         # Feature code can be provided either via env (EXTERNAL_API_FEATURE_CODE)
@@ -285,7 +298,18 @@ class ApiDataAdapter:
                     payload.setdefault("featureCode", feature_code)
                     params.setdefault("featureCode", feature_code)
 
-            logger.debug("MES %s %s params=%s headers=%s payload=%s", method, url, params, {k: (v[:10]+"..." if k=="Authorization" and v else v) for k,v in headers.items()}, (payload if method == "POST" else None))
+            safe_headers = {
+                k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                for k, v in headers.items()
+            }
+            logger.debug(
+                "MES %s %s params=%s headers=%s payload=%s",
+                method,
+                url,
+                params,
+                safe_headers,
+                (payload if method == "POST" else None),
+            )
             async with httpx.AsyncClient(timeout=self.timeout, verify=self.verify_tls) as client:
                 r = None
                 for attempt in range(retries):
@@ -308,7 +332,10 @@ class ApiDataAdapter:
 
             logger.debug("MES response status=%s text=%s", r.status_code, (r.text[:1000] + '...' if len(r.text) > 1000 else r.text))
             if r.status_code != 200:
-                safe_headers = {k: (v[:10] + "..." if k.lower() == "authorization" and v else v) for k, v in headers.items()}
+                safe_headers = {
+                    k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                    for k, v in headers.items()
+                }
                 logger.warning(
                     "MES returned non-200: %s %s | url=%s | params=%s | headers=%s",
                     r.status_code,
@@ -391,7 +418,11 @@ class ApiDataAdapter:
 
             # NOTE: factoryCode is used only for routing base URL; do not send as a query param.
 
-            logger.debug("MES GET %s params=%s headers=%s", url, params, {k: (v[:10]+"..." if k=="Authorization" and v else v) for k,v in headers.items()})
+            safe_headers = {
+                k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                for k, v in headers.items()
+            }
+            logger.debug("MES GET %s params=%s headers=%s", url, params, safe_headers)
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 r = None
                 for attempt in range(retries):
@@ -411,7 +442,10 @@ class ApiDataAdapter:
 
             logger.debug("MES response status=%s text=%s", r.status_code, (r.text[:1000] + '...' if len(r.text) > 1000 else r.text))
             if r.status_code != 200:
-                safe_headers = {k: (v[:10] + "..." if k.lower() == "authorization" and v else v) for k, v in headers.items()}
+                safe_headers = {
+                    k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                    for k, v in headers.items()
+                }
                 logger.warning(
                     "MES returned non-200: %s %s | url=%s | params=%s | headers=%s",
                     r.status_code,
@@ -436,7 +470,11 @@ class ApiDataAdapter:
                     payload.setdefault("featureCode", feature_code)
                 for attempt in range(retries):
                     try:
-                        logger.debug("MES request to %s headers=%s payload=%s", self.base_url, {k: (v[:10]+"..." if k=="Authorization" and v else v) for k,v in headers.items()}, payload)
+                        safe_headers = {
+                            k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                            for k, v in headers.items()
+                        }
+                        logger.debug("MES request to %s headers=%s payload=%s", self.base_url, safe_headers, payload)
                         r = await client.post(self.base_url, json=payload, headers=headers)
                         break
                     except (httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectError) as e:
@@ -452,7 +490,10 @@ class ApiDataAdapter:
 
             logger.debug("MES response status=%s text=%s", r.status_code, (r.text[:1000] + '...' if len(r.text) > 1000 else r.text))
             if r.status_code != 200:
-                safe_headers = {k: (v[:10] + "..." if k.lower() == "authorization" and v else v) for k, v in headers.items()}
+                safe_headers = {
+                    k: ("Bearer ***" if (k.lower() == "authorization" and v) else v)
+                    for k, v in headers.items()
+                }
                 logger.warning(
                     "MES returned non-200: %s %s | url=%s | headers=%s",
                     r.status_code,

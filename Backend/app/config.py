@@ -10,5 +10,6 @@ if not EXTERNAL_API_BASE_URL:
 if not EXTERNAL_API_PREFIX:
     raise RuntimeError("Missing EXTERNAL_API_PREFIX")
 
-if not EXTERNAL_API_TOKEN:
-    raise RuntimeError("Missing EXTERNAL_API_TOKEN")
+# EXTERNAL_API_TOKEN is optional:
+# - In local/dev you may set a default token via env.
+# - In service mode, MES can supply a token per request.
