@@ -1,0 +1,288 @@
+entities:
+  production:
+    canonical: production
+    synonyms:
+      - sản lượng
+      - sản xuất
+      - năng suất
+      - productivity
+      - output
+      - production
+  defect:
+    canonical: defect
+    synonyms:
+      - lỗi
+      - defect
+      - ppm
+actions:
+  report:
+    canonical: report
+    synonyms:
+      - thống kê
+      - báo cáo
+      - report
+  statistic:
+    canonical: statistic
+    synonyms:
+      - thống kê
+      - thống kê theo
+      - statistic
+      - statistics
+      - analytics
+  query:
+    canonical: query
+    synonyms:
+      - truy xuất
+      - query
+      - search
+
+# Group-by dimensions (add synonyms here instead of changing code)
+dimensions:
+  line:
+    canonical: line
+    synonyms:
+      - line
+      - dây chuyền
+      - dây chuyền sản xuất
+      - theo line
+      - by line
+      - per line
+      - 라인
+      - 라인별
+  month:
+    canonical: month
+    synonyms:
+      - tháng
+      - theo tháng
+      - month
+      - by month
+      - per month
+      - 월
+      - 월별
+  year:
+    canonical: year
+    synonyms:
+      - year
+      - yearly
+      - by year
+      - per year
+      - theo năm
+      - theo nam
+      - năm
+      - nam
+      - 년
+      - 연
+  quarter:
+    canonical: quarter
+    synonyms:
+      - quarter
+      - quarterly
+      - by quarter
+      - per quarter
+      - theo quý
+      - theo quy
+      - quý
+      - quy
+      - 분기
+  week:
+    canonical: week
+    synonyms:
+      - week
+      - weekly
+      - by week
+      - per week
+      - theo tuần
+      - theo tuan
+      - tuần
+      - tuan
+      - 주
+      - 주별
+  date:
+    canonical: date
+    synonyms:
+      - date
+      - plan date
+      - planned date
+      - daily
+      - day
+      - theo ngày
+      - theo ngay
+      - ngày
+      - ngay
+      - theo plan date
+      - by date
+      - per day
+  shift:
+    canonical: shift
+    synonyms:
+      - shift
+      - ca
+      - theo ca
+      - theo ca lam
+      - ca làm
+      - ca lam
+      - theo shift
+      - by shift
+      - per shift
+      - work shift
+      - workshift
+  prodStatus:
+    canonical: prodStatus
+    synonyms:
+      - trạng thái
+      - trạng thái sản xuất
+      - status
+      - production status
+      - prod status
+      - 생산상태
+      - 상태
+  model:
+    canonical: model
+    synonyms:
+      - model
+      - mã model
+      - mã hàng
+      - 품목
+      - 모델
+  processType:
+    canonical: processType
+    synonyms:
+      - công đoạn
+      - process
+      - process type
+      - theo công đoạn
+      - by process
+      - by process type
+      - 공정
+slots:
+  time_range:
+    type: period
+    examples:
+      - "1 year"
+      - "6 months"
+
+# Metric definitions are used for derived KPI computation.
+# Keep formulas here so planner can compute flexibly without hardcoding.
+metrics:
+  # -----------------------------
+  # Base metrics (directly from APIs)
+  # -----------------------------
+  plan_qty:
+    canonical: plan_qty
+    synonyms:
+      - kế hoạch
+      - ke hoach
+      - sản lượng kế hoạch
+      - sl kế hoạch
+      - plan
+      - planned
+      - plan qty
+      - planned qty
+      - planned quantity
+    unit: pcs
+    entity: production
+    missing_as_zero: true
+
+  actual_production_qty:
+    canonical: actual_production_qty
+    synonyms:
+      - sản lượng thực tế
+      - sản lượng sản xuất thực tế
+      - sản lượng sx thực tế
+      - sl thực tế
+      - actual qty
+      - actual quantity
+      - actual output
+      - sản lượng actual
+    unit: pcs
+    entity: production
+    missing_as_zero: true
+
+  defect_count:
+    canonical: defect_count
+    synonyms:
+      - số lỗi
+      - số lượng lỗi
+      - defect count
+      - number of defects
+      - quantity of defects
+    unit: pcs
+    entity: defect
+    missing_as_zero: true
+
+  # -----------------------------
+  # Computed KPIs (derived via formula)
+  # NOTE: formulas live here so KPI logic is config-driven (no hardcoding).
+  # -----------------------------
+  variance_qty:
+    canonical: variance_qty
+    synonyms:
+      - chênh lệch
+      - chenhlech
+      - variance
+      - plan variance
+      - actual minus plan
+    unit: pcs
+    entity: production
+    precision: 0
+    formula: "actual_production_qty - plan_qty"
+    depends_on:
+      - actual_production_qty
+      - plan_qty
+
+  plan_attainment_percent:
+    canonical: plan_attainment_percent
+    synonyms:
+      - tỷ lệ đạt kế hoạch
+      - ty le dat ke hoach
+      - đạt kế hoạch
+      - dat ke hoach
+      - plan attainment
+      - plan attainment %
+      - plan attainment percent
+      - plan achievement
+      - achievement rate
+      - completion rate
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "(actual_production_qty / plan_qty) * 100"
+    depends_on:
+      - actual_production_qty
+      - plan_qty
+
+  defect_percent:
+    canonical: defect_percent
+    synonyms:
+      - defect %
+      - defect percent
+      - defect rate
+      - defect rate %
+      - tỷ lệ lỗi
+      - ty le loi
+      - "% lỗi"
+      - "% loi"
+      - defect percentage
+    unit: percent
+    entity: defect
+    precision: 2
+    formula: "(defect_count / actual_production_qty) * 100"
+    depends_on:
+      - defect_count
+      - actual_production_qty
+
+  defect_ppm:
+    canonical: defect_ppm
+    synonyms:
+      - defect ppm
+      - ppm
+      - ppm lỗi
+      - ppm defect
+    unit: ppm
+    entity: defect
+    precision: 2
+    # defect ppm = defect_count / actual_production_qty * 1,000,000
+    formula: "(defect_count / actual_production_qty) * 1000000"
+    depends_on:
+      - defect_count
+      - actual_production_qty

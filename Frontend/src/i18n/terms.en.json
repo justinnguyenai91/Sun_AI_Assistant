@@ -1,0 +1,35 @@
+{
+  "date": "Date",
+  "week": "Week",
+  "quarter": "Quarter",
+  "year": "Year",
+  "month": "Month",
+  "lineName": "Line Name",
+  "lineId": "Line ID",
+  "lineCode": "Line Code",
+  "model": "Model",
+  "modelCode": "Model Code",
+  "modelName": "Model Name",
+  "orders": "Orders",
+
+  "factoryCode": "Factory",
+  "shift": "Shift",
+
+  "plannedQty": "Planned Qty",
+  "actualQty": "Actual Qty",
+  "defectQty": "Defect Qty",
+  "avgTactTime": "Avg Tact",
+
+  "yield": "Yield",
+  "defectRate": "Defect Rate",
+
+  "defectPpm": "Defect PPM",
+
+  "productionStatus": "Production Status",
+  "productionStatusCode": "Production Status Code",
+  "statusCount": "Status Count",
+
+  "processType": "Process Type",
+  "processTypeCode": "Process Type Code",
+  "processCount": "Process Count"
+}

@@ -1,0 +1,54 @@
+# Chat-style automated test cases for /analyze
+#
+# Each case is a natural-language prompt + optional context.
+# The runner will execute cases sequentially and write a transcript-like log.
+#
+# Expectations are intentionally lightweight (shape/columns/row counts)
+# so they remain stable even when live data changes.
+
+meta:
+  default_locale: vi
+  default_timeout_seconds: 60
+
+cases:
+  - id: productivity_by_line_2026_01_01_2026_01_15
+    title: "Statistic productivity group by line"
+    input: "Please do statistic productivity group by line from 2026-01-01 to 2026-01-15"
+    context:
+      debug: false
+      # factoryCode: FAC01
+      # factoryCodes: [FAC01, DJVN1]
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - user_input
+        - intent
+        - planner_result.data
+      # If your environment returns a table for productivity, require at least these columns when present.
+      # Leave as soft expectations (warn) by using optional_columns.
+      optional_columns:
+        - lineCode
+        - lineName
+        - date
+        - shift
+      # For volatile live data, avoid strict row counts by default.
+      min_rows: 0
+
+  - id: defect_status_report_range
+    title: "Report defect status"
+    input: "Please report defect status from 2026-01-01 to 2026-01-15"
+    context:
+      debug: false
+      # factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - user_input
+        - intent
+        - planner_result.data
+      optional_columns:
+        - date
+        - shift
+        - defect_count
+        - defect_ppm
+      min_rows: 0

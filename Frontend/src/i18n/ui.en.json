@@ -1,0 +1,16 @@
+{
+  "fetchedRows": "Fetched {count} rows for {target}.",
+  "cannotFetchData": "Couldn't fetch data: {error}",
+  "noData": "Got it. No table data returned yet.",
+  "noLastDataset": "No recent dataset to render. Ask a data question first (e.g., 'production report by line for last 3 months').",
+  "renderChartFromLast": "Ok, rendering a chart from the latest result.",
+  "noChartableDataset": "No suitable dataset to chart yet (need numeric report data, grouped by line/month/status). Ask: 'production report by line for last 3 months' and then render a chart.",
+  "renderTableFromLast": "Ok, rendering a table from the latest result.",
+  "modelLoadingRetry": "Model is loading ({detail}). Retrying in {seconds}s ({attempt}/{max}).",
+  "apiError": "⚠️ API error: {error}",
+  "confirmHideGroupBy": "You're hiding a group-by key ({dims}). Choose: (1) refresh data (remove group-by {dims}) or (2) just hide the column (no refresh).",
+  "confirmHideGroupByHideOnlyAck": "OK — I'll only hide the column and keep the current data (no refresh).",
+  "confirmHideGroupByAskAgain": "Please choose: (1) refresh data, or (2) just hide the column?",
+  "confirmHideGroupByNoOriginal": "I don't have the original query to refresh. Please resend your data request.",
+  "requestCancelled": "Request cancelled. You can enter a new request now."
+}

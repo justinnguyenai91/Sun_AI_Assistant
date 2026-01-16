@@ -1,29 +1,48 @@
 // src/components/ChatInput.jsx
 import { useState } from "react";
 
-export default function ChatInput({ onSend }) {
+export default function ChatInput({ onSend, isLoading, onCancel, locale }) {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
+    if (isLoading) return;
     if (!input.trim()) return;
     onSend(input);
     setInput("");
   };
 
+  const handleCancel = () => {
+    if (!isLoading) return;
+    onCancel?.();
+  };
+
+  const isVi = String(locale || "en").toLowerCase().startsWith("vi");
+
   return (
-    <div className="flex items-center gap-2 p-3 border-t">
-      <input
-        className="flex-1 border rounded-xl px-3 py-2 focus:outline-none"
+    <div className="chat-input">
+      <textarea
+        className="chat-input-box"
         placeholder="Nhập tin nhắn..."
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSend()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+          }
+        }}
+        rows={1}
       />
       <button
-        className="bg-blue-500 text-white px-4 py-2 rounded-xl"
-        onClick={handleSend}
+        className={`btn-primary${isLoading ? " is-loading" : ""}`}
+        onClick={isLoading ? handleCancel : handleSend}
+        title={isLoading ? (isVi ? "Huỷ request" : "Cancel request") : (isVi ? "Gửi" : "Send")}
+        aria-label={isLoading ? (isVi ? "Huỷ request" : "Cancel request") : (isVi ? "Gửi" : "Send")}
       >
-        Gửi
+        <span className="btn-inner">
+          {isLoading && <span className="btn-spinner" aria-hidden="true" />}
+          <span className="btn-text">{isLoading ? (isVi ? "Huỷ" : "Cancel") : isVi ? "Gửi" : "Send"}</span>
+        </span>
       </button>
     </div>
   );

@@ -1,4 +1,4 @@
-from settings import settings
+from Backend.app.settings import settings
 import httpx
 
 async def chat(messages):

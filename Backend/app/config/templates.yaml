@@ -1,0 +1,442 @@
+templates:
+  - id: prod.stat.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, prodStatus, processType]
+    group_by: line
+    aggregates:
+      - name: totalPlanQty
+        expr: sum(planQty)
+      - name: totalDefectQty
+        expr: sum(defectQty)
+      - name: avgTactTime
+        expr: avg(tactTime)
+      - name: totalActualQty
+        expr: sum(actualQty)
+      - name: productionStatus
+        expr: countDistinct(prodStatus.code)
+      - name: processType
+        expr: countDistinct(process.code)
+    viz: bar
+
+  - id: prod.stat.line.model
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, modelId, prodStatus, processType]
+    group_by: [line, model]
+    aggregates:
+      - name: totalPlanQty
+        expr: sum(planQty)
+      - name: totalActualQty
+        expr: sum(actualQty)
+      - name: totalDefectQty
+        expr: sum(defectQty)
+      - name: avgTactTime
+        expr: avg(tactTime)
+    viz: bar
+
+  - id: prod.stat.model
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, modelId, prodStatus, processType]
+    group_by: [model]
+    aggregates:
+      - name: totalPlanQty
+        expr: sum(planQty)
+      - name: totalActualQty
+        expr: sum(actualQty)
+      - name: totalDefectQty
+        expr: sum(defectQty)
+      - name: avgTactTime
+        expr: avg(tactTime)
+    viz: bar
+
+  - id: prod.stat.month.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, prodStatus, processType, modelId]
+    group_by: [month, line]
+    aggregates:
+      - name: totalPlanQty
+        expr: sum(planQty)
+      - name: totalActualQty
+        expr: sum(actualQty)
+      - name: totalDefectQty
+        expr: sum(defectQty)
+      - name: avgTactTime
+        expr: avg(tactTime)
+    viz: bar
+
+  - id: prod.stat.month.line.status
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, prodStatus, processType, modelId]
+    group_by: [month, line, prodStatus]
+    aggregates:
+      - name: totalPlanQty
+        expr: sum(planQty)
+      - name: totalActualQty
+        expr: sum(actualQty)
+      - name: totalDefectQty
+        expr: sum(defectQty)
+      - name: avgTactTime
+        expr: avg(tactTime)
+      - name: orderCount
+        expr: count(*)
+    viz: bar
+
+  - id: prod.query.raw
+    entity: production
+    action: query
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, prodStatus, processType]
+    group_by: null
+    aggregates: []
+    viz: table
+
+  # ------------------------------------------------------------
+  # NEW: Production result details by ACTUAL date (daily)
+  # Source API:
+  #   /production-result/details/search?displayType=actual&from=...&to=...
+  # ------------------------------------------------------------
+  - id: prod.plan.daily
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    group_by: [date]
+    provides: [plan_qty]
+    # productionOrder/search vendor params often use factoryPk (singular).
+    # We keep semantic filters in normalized keys (factoryPks) and map here.
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPk
+      linePks: linePks
+      modelId: modelId
+      prodStatus: prodStatus
+      processType: processType
+      poType: poType
+    dimension_fields:
+      date: [planDate, plan_date, date]
+    measure:
+      var: plan_qty
+      op: sum
+      field: planQty
+    viz: table
+
+  # ------------------------------------------------------------
+  # Wrapper: Actual production qty (daily)
+  # Prefer this so response uses measure-based aggregation (computed path)
+  # ------------------------------------------------------------
+  - id: kpi.actual_qty.daily
+    entity: production
+    action: statistic
+    type: computed
+    group_by: [date]
+    provides: [actual_production_qty]
+    steps:
+      - template_id: prod.result.actual.daily
+        as: production
+    formula:
+      metric: actual_production_qty
+      formula: "actual_production_qty"
+      variables:
+        actual_production_qty: production.actual_production_qty
+    viz: table
+
+  - id: prod.result.actual.daily
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /production-result/details/search
+    group_by: [date]
+    provides: [actual_production_qty]
+    fixed_params:
+      displayType: actual
+    # Map semantic filters -> vendor query params. If filter key exists, it will be sent.
+    query_params:
+      from: from
+      to: to
+      poNo: poNo
+      modelCode: modelCode
+      modelName: modelName
+      serialLabelNo: serialLabelNo
+      finalYn: finalYn
+      reflect: reflect
+      state: state
+      factoryPks: factoryPks
+      plantPks: plantPks
+      teamPks: teamPks
+      groupPks: groupPks
+      partPks: partPks
+      linePks: linePks
+      processPks: processPks
+    dimension_fields:
+      date: [actualDate, actual_date, date, planDate]
+    measure:
+      var: actual_production_qty
+      op: sum
+      field: [serialQty, serial_qty, actualQty, actual_qty, qty, quantity]
+    viz: table
+
+  # ------------------------------------------------------------
+  # Wrapper: Actual production qty (daily + shift)
+  # Prefer this over base template so response uses measure-based aggregation
+  # via computed-step aggregation (no legacy aggregates fields needed).
+  # ------------------------------------------------------------
+  - id: kpi.actual_qty.daily_shift
+    entity: production
+    action: statistic
+    type: computed
+    group_by: [date, shift]
+    provides: [actual_production_qty]
+    steps:
+      - template_id: prod.result.actual.daily_shift
+        as: production
+    formula:
+      metric: actual_production_qty
+      formula: "actual_production_qty"
+      variables:
+        actual_production_qty: production.actual_production_qty
+    viz: table
+
+  - id: prod.result.actual.daily_shift
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /production-result/details/search
+    group_by: [date, shift]
+    provides: [actual_production_qty]
+    fixed_params:
+      displayType: actual
+    query_params:
+      from: from
+      to: to
+      poNo: poNo
+      modelCode: modelCode
+      modelName: modelName
+      serialLabelNo: serialLabelNo
+      finalYn: finalYn
+      reflect: reflect
+      state: state
+      factoryPks: factoryPks
+      plantPks: plantPks
+      teamPks: teamPks
+      groupPks: groupPks
+      partPks: partPks
+      linePks: linePks
+      processPks: processPks
+    dimension_fields:
+      date: [actualDate, actual_date, date, planDate]
+      shift:
+        - shift
+        - commonCodeShift.code
+        - commonCodeShift.name
+        - shift.code
+        - shift.name
+        - workShift.code
+        - workShift.name
+        - shiftCode
+    dimension_defaults:
+      shift: D001001
+    measure:
+      var: actual_production_qty
+      op: sum
+      field: [serialQty, serial_qty, actualQty, actual_qty, qty, quantity]
+    viz: table
+
+  # ------------------------------------------------------------
+  # NEW: Process defect search v2 (daily)
+  # Source API:
+  #   /process-defect/search-v2?factoryPks=...&linePks=...&processPks=...
+  # ------------------------------------------------------------
+  - id: quality.process_defect.daily
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: POST
+    endpoint: /process-defect/search-v2
+    group_by: [date]
+    provides: [defect_count]
+    fixed_params:
+      pageSize: 1000
+      pageNumber: 0
+      size: 1000
+      page: 0
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPks
+      plantPks: plantPks
+      teamPks: teamPks
+      groupPks: groupPks
+      partPks: partPks
+      linePks: linePks
+      processPks: processPks
+    dimension_fields:
+      date:
+        - processDefect.defectDate
+        - processDefect.defectTime
+        - processDefect.dteLogI
+        - processDefect.dteLogU
+        - processDefect.occurDate
+        - processDefect.defectDate
+        - actualDate
+        - occurDate
+        - defectDate
+        - createdDate
+        - createdAt
+        - date
+    measure:
+      var: defect_count
+      op: sum
+      assume_one_if_missing: true
+      field:
+        - processDefect.defectQty
+        - processDefect.defect_qty
+        - processDefect.qty
+        - processDefect.quantity
+        - processDefect.ngQty
+        - processDefect.ng_qty
+        - processDefect.defectCount
+        - processDefect.defect_count
+        - processDefect.value
+        - defectQty
+        - defect_qty
+        - qty
+        - quantity
+        - ngQty
+        - ng_qty
+        - defectCount
+        - defect_count
+    viz: table
+
+  - id: quality.process_defect.daily_shift
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: POST
+    endpoint: /process-defect/search-v2
+    group_by: [date, shift]
+    provides: [defect_count]
+    fixed_params:
+      pageSize: 1000
+      pageNumber: 0
+      size: 1000
+      page: 0
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPks
+      plantPks: plantPks
+      teamPks: teamPks
+      groupPks: groupPks
+      partPks: partPks
+      linePks: linePks
+      processPks: processPks
+    dimension_fields:
+      date:
+        - processDefect.defectDate
+        - processDefect.defectTime
+        - processDefect.dteLogI
+        - processDefect.dteLogU
+        - processDefect.occurDate
+        - actualDate
+        - occurDate
+        - defectDate
+        - createdDate
+        - createdAt
+        - date
+      shift:
+        - processDefect.shift.code
+        - processDefect.shift.name
+        - shift.code
+        - shift.name
+        - shiftCode
+        - shift
+    dimension_defaults:
+      shift: D001001
+    measure:
+      var: defect_count
+      op: sum
+      assume_one_if_missing: true
+      field:
+        - processDefect.defectQty
+        - processDefect.defect_qty
+        - processDefect.qty
+        - processDefect.quantity
+        - processDefect.ngQty
+        - processDefect.ng_qty
+        - processDefect.defectCount
+        - processDefect.defect_count
+        - processDefect.value
+        - defectQty
+        - defect_qty
+        - qty
+        - quantity
+        - ngQty
+        - ng_qty
+        - defectCount
+        - defect_count
+    viz: table
+
+  # ------------------------------------------------------------
+  # NEW: Computed KPI template (defect_ppm per day)
+  # Uses ontology.metrics.defect_ppm.formula
+  # ------------------------------------------------------------
+  - id: kpi.defect_ppm.daily
+    entity: defect
+    action: statistic
+    type: computed
+    group_by: [date]
+    provides: [defect_ppm]
+    steps:
+      - template_id: prod.result.actual.daily
+        as: production
+      - template_id: quality.process_defect.daily
+        as: defects
+    formula:
+      metric: defect_ppm
+      variables:
+        actual_production_qty: production.actual_production_qty
+        defect_count: defects.defect_count
+    viz: table
+
+  - id: kpi.defect_ppm.daily_shift
+    entity: defect
+    action: statistic
+    type: computed
+    group_by: [date, shift]
+    provides: [defect_ppm]
+    steps:
+      - template_id: prod.result.actual.daily_shift
+        as: production
+      - template_id: quality.process_defect.daily_shift
+        as: defects
+    formula:
+      metric: defect_ppm
+      variables:
+        actual_production_qty: production.actual_production_qty
+        defect_count: defects.defect_count
+    viz: table

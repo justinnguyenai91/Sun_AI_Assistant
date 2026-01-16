@@ -1,0 +1,49 @@
+version: 1
+
+datasources:
+  production_api:
+    type: http
+
+    resources:
+      production_order:
+        endpoint: /productionOrder/search
+        method: GET
+
+        description: >
+          Search production orders from MES system
+          by date range, status, organization, and model.
+
+        # semantic → API parameter mapping
+        query_params:
+
+          date_range:
+            from_date: from
+            to_date: to
+
+          approval:
+            approval_status: aprStatus
+
+          status:
+            production_status: prodStatuses
+
+          planning:
+            plan_id: planId
+            po_no: poNo
+            po_type: poType
+
+          model:
+            model_code: modelCode
+            model_name: modelName
+            top_model: topModel
+
+          process:
+            process: process
+            process_pks: processPks
+
+          organization:
+            factory_pks: factoryPks
+            plant_pks: plantPks
+            team_pks: teamPks
+            group_pks: groupPks
+            part_pks: partPks
+            line_pks: linePks

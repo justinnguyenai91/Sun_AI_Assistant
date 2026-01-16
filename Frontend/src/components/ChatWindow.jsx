@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble.jsx";
 import Loader from "./Loader.jsx";
 
-export default function ChatWindow({ messages, isLoading }) {
+export default function ChatWindow({ messages, isLoading, locale }) {
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -11,9 +11,9 @@ export default function ChatWindow({ messages, isLoading }) {
   }, [messages, isLoading]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+    <div className="chat-window">
       {messages.map((msg, idx) => (
-        <MessageBubble key={idx} sender={msg.sender} text={msg.text} />
+        <MessageBubble key={idx} message={{ ...msg, locale: msg?.locale || locale }} />
       ))}
       {isLoading && <Loader />}
       <div ref={chatEndRef} />

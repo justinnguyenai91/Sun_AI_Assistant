@@ -1,0 +1,24 @@
+# Local/editor
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+**/node_modules/
+
+# Chat test logs
+Backend/tests/chat_test_log_*.txt
+
+# Large model binaries
+Model/*.gguf
+
+# Local env overrides (keep Backend/.env.docker tracked but sanitized)
+.env
+.env.*
+Backend/.env
+Backend/.env.*
+Frontend/.env
+Frontend/.env.*
