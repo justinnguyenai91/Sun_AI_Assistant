@@ -5,6 +5,12 @@ pydantic==2.*
 slowapi==0.1.9
 httpx==0.27.*
 python-dotenv==1.0.*
+pyyaml==6.*
 pandas
 sqlalchemy
 psycopg2-binary
+asyncpg
+
+# Dependencies needed by gateway app
+lark-parser
+Flask

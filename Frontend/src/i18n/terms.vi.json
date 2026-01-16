@@ -1,0 +1,35 @@
+{
+  "date": "Ngày",
+  "week": "Tuần",
+  "quarter": "Quý",
+  "year": "Năm",
+  "month": "Tháng",
+  "lineName": "Tên dây chuyền",
+  "lineId": "Mã dây chuyền",
+  "lineCode": "Mã dây chuyền",
+  "model": "Model",
+  "modelCode": "Mã model",
+  "modelName": "Tên model",
+  "orders": "Số lệnh",
+
+  "factoryCode": "Nhà máy",
+  "shift": "Ca",
+
+  "plannedQty": "Số lượng kế hoạch",
+  "actualQty": "Sản lượng thực tế",
+  "defectQty": "Số lượng lỗi",
+  "avgTactTime": "Tact trung bình",
+
+  "yield": "Tỷ lệ đạt",
+  "defectRate": "Tỷ lệ lỗi",
+
+  "defectPpm": "PPM lỗi",
+
+  "productionStatus": "Trạng thái sản xuất",
+  "productionStatusCode": "Mã trạng thái sản xuất",
+  "statusCount": "Số trạng thái",
+
+  "processType": "Công đoạn",
+  "processTypeCode": "Mã công đoạn",
+  "processCount": "Số công đoạn"
+}

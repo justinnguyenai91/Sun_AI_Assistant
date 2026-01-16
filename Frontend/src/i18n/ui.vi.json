@@ -1,0 +1,16 @@
+{
+  "fetchedRows": "Mình đã lấy {count} dòng kết quả cho {target}.",
+  "cannotFetchData": "Không lấy được dữ liệu: {error}",
+  "noData": "Mình đã nhận yêu cầu. Hiện chưa có bảng dữ liệu trả về.",
+  "noLastDataset": "Mình chưa có dữ liệu gần nhất để vẽ/hiện bảng. Bạn hãy hỏi một câu có dữ liệu trước (vd: ‘thống kê sản lượng 3 tháng theo line’).",
+  "renderChartFromLast": "Ok, mình vẽ chart từ kết quả gần nhất.",
+  "noChartableDataset": "Mình chưa thấy dữ liệu phù hợp để vẽ chart (cần dữ liệu số, có thể theo line/tháng/trạng thái). Bạn hãy hỏi: ‘thống kê sản lượng 3 tháng theo line’ rồi vẽ chart.",
+  "renderTableFromLast": "Ok, mình hiển thị bảng từ kết quả gần nhất.",
+  "modelLoadingRetry": "Model đang tải ({detail}). Mình sẽ thử lại sau {seconds}s (lần {attempt}/{max}).",
+  "apiError": "⚠️ Lỗi khi gọi API: {error}",
+  "confirmHideGroupBy": "Bạn đang ẩn cột thuộc group by ({dims}). Bạn muốn: (1) Làm mới dữ liệu (bỏ group by {dims}) hay (2) Chỉ ẩn cột (không làm mới)?",
+  "confirmHideGroupByHideOnlyAck": "OK, mình sẽ chỉ ẩn cột và giữ nguyên dữ liệu (không làm mới).",
+  "confirmHideGroupByAskAgain": "Bạn chọn giúp mình: (1) Làm mới dữ liệu, hay (2) Chỉ ẩn cột?",
+  "confirmHideGroupByNoOriginal": "Mình chưa có câu truy vấn gốc để làm mới. Bạn gửi lại câu hỏi dữ liệu giúp mình nhé.",
+  "requestCancelled": "Đã huỷ request. Bạn có thể nhập yêu cầu mới và gửi lại."
+}

@@ -1,0 +1,24 @@
+rules:
+  - rule_id: utilization_critical
+    applies_to: utilization_rate
+    condition:
+      operator: "<"
+      value_from: threshold.critical
+    decision: CRITICAL
+    reason: "Utilization below critical threshold"
+
+  - rule_id: utilization_warning
+    applies_to: utilization_rate
+    condition:
+      operator: "<"
+      value_from: threshold.warning
+    decision: WARNING
+    reason: "Utilization below warning threshold"
+
+  - rule_id: utilization_ok
+    applies_to: utilization_rate
+    condition:
+      operator: ">="
+      value_from: threshold.warning
+    decision: OK
+    reason: "Utilization within acceptable range"
