@@ -1,4 +1,5 @@
 import time, uuid
+import logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -6,6 +7,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
+
+access_logger = logging.getLogger("access")
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -20,7 +23,14 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
                 "access-control-allow-headers": request.headers.get("access-control-request-headers", "Authorization,Content-Type"),
             }
             response = Response(status_code=200, headers=headers)
-            print(f"[ACCESS] rid={rid} {request.method} {request.url.path} {response.status_code} 0ms")
+            access_logger.info(
+                "rid=%s %s %s %s %sms",
+                rid,
+                request.method,
+                request.url.path,
+                response.status_code,
+                0,
+            )
             return response
         start = time.time()
         response: Response = await call_next(request)
@@ -28,5 +38,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         response.headers["x-request-id"] = rid
         # access log gọn
         # (Bài 3 sẽ ghi DB; ở đây chỉ in console)
-        print(f"[ACCESS] rid={rid} {request.method} {request.url.path} {response.status_code} {dur}ms")
+        access_logger.info(
+            "rid=%s %s %s %s %sms",
+            rid,
+            request.method,
+            request.url.path,
+            response.status_code,
+            dur,
+        )
         return response

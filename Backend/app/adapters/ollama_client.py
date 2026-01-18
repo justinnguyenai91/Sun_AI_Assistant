@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import asyncio
+
 import time
 
 import httpx
@@ -30,16 +32,48 @@ def _json_or_raw(r: httpx.Response) -> Dict[str, Any]:
     return {"raw": r.text}
 
 
+def _is_loading_model(status_code: int, body: Dict[str, Any]) -> bool:
+    if status_code != 503:
+        return False
+    try:
+        msg = None
+        if isinstance(body, dict):
+            err = body.get("error")
+            if isinstance(err, dict):
+                msg = err.get("message")
+            if not msg:
+                msg = body.get("message") or body.get("raw")
+        return isinstance(msg, str) and "loading" in msg.lower() and "model" in msg.lower()
+    except Exception:
+        return False
+
+
 async def chat(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Proxy OpenAI-ish payload to Ollama /api/chat and normalize response."""
     mapped = map_openai_to_ollama(payload)
+
+    max_attempts = 6
+    delay_seconds = 1.0
+    delay_cap = 4.0
+
     async with httpx.AsyncClient(timeout=120) as client:
-        r = await client.post(f"{settings.OLLAMA_URL}/api/chat", json=mapped)
+        last_status = 503
+        last_body: Dict[str, Any] = {"error": {"message": "Loading model"}}
+        for attempt in range(1, max_attempts + 1):
+            r = await client.post(f"{settings.OLLAMA_URL}/api/chat", json=mapped)
+            body = _json_or_raw(r)
+            if _is_loading_model(r.status_code, body) and attempt < max_attempts:
+                await asyncio.sleep(min(delay_seconds, delay_cap))
+                delay_seconds = min(delay_seconds * 2, delay_cap)
+                last_status, last_body = r.status_code, body
+                continue
+            # Continue existing normalization logic below.
+            break
 
     if r.status_code != 200:
-        return {"status": r.status_code, "data": _json_or_raw(r)}
+        return {"status": r.status_code, "data": body}
 
-    d = _json_or_raw(r)
+    d = body
     text = (d.get("message") or {}).get("content") or ""
 
     norm = {

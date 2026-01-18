@@ -177,6 +177,12 @@ class ApiDataAdapter:
         elif self.bearer:
             headers["Authorization"] = f"Bearer {self.bearer}"
 
+        # If no token is available, fail fast so callers don't mistake it for "no data".
+        if "Authorization" not in headers:
+            raise RuntimeError(
+                "mes_missing_access_token: set EXTERNAL_API_TOKEN (service mode) or pass context.mesToken (per-request mode)"
+            )
+
         # Feature code can be provided either via env (EXTERNAL_API_FEATURE_CODE)
         # or per-request (filters.featureCode) to support multiple MES permissions.
         filters = execution_plan.get("filters", {}) or {}
@@ -344,7 +350,7 @@ class ApiDataAdapter:
                     params,
                     safe_headers,
                 )
-                return []
+                raise RuntimeError(f"mes_upstream_non_200: status={r.status_code}")
             try:
                 data = r.json()
             except Exception as e:
@@ -454,7 +460,7 @@ class ApiDataAdapter:
                     params,
                     safe_headers,
                 )
-                return []
+                raise RuntimeError(f"mes_upstream_non_200: status={r.status_code}")
             try:
                 data = r.json()
             except Exception as e:
@@ -501,7 +507,7 @@ class ApiDataAdapter:
                     self.base_url,
                     safe_headers,
                 )
-                return []
+                raise RuntimeError(f"mes_upstream_non_200: status={r.status_code}")
 
             try:
                 data = r.json()
@@ -515,15 +521,42 @@ class ApiDataAdapter:
             inner = data.get("data")
             if isinstance(inner, list):
                 logger.debug("MES returned data list rows count=%d", len(inner))
+                if str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                    logger.info(
+                        "MES.rows",
+                        extra={
+                            "endpoint": endpoint,
+                            "method": method,
+                            "row_count": len(inner),
+                        },
+                    )
                 return inner
             if isinstance(inner, dict):
                 if isinstance(inner.get("content"), list):
                     rows = inner.get("content")
                     logger.debug("MES returned data.content rows count=%d", len(rows))
+                    if str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                        logger.info(
+                            "MES.rows",
+                            extra={
+                                "endpoint": endpoint,
+                                "method": method,
+                                "row_count": len(rows),
+                            },
+                        )
                     return rows
                 if isinstance(inner.get("rows"), list):
                     rows = inner.get("rows")
                     logger.debug("MES returned data.rows rows count=%d", len(rows))
+                    if str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                        logger.info(
+                            "MES.rows",
+                            extra={
+                                "endpoint": endpoint,
+                                "method": method,
+                                "row_count": len(rows),
+                            },
+                        )
                     return rows
             logger.warning("MES returned unexpected 'data' wrapper type: %s", type(inner))
             return []
@@ -532,14 +565,41 @@ class ApiDataAdapter:
         if isinstance(data, dict) and "content" in data:
             rows = data.get("content")
             logger.debug("MES returned content rows count=%d", len(rows) if isinstance(rows, list) else 0)
+            if isinstance(rows, list) and str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                logger.info(
+                    "MES.rows",
+                    extra={
+                        "endpoint": endpoint,
+                        "method": method,
+                        "row_count": len(rows),
+                    },
+                )
             return rows if isinstance(rows, list) else []
 
         if isinstance(data, dict) and "rows" in data:
             rows = data.get("rows")
             logger.debug("MES returned rows count=%d", len(rows) if isinstance(rows, list) else 0)
+            if isinstance(rows, list) and str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                logger.info(
+                    "MES.rows",
+                    extra={
+                        "endpoint": endpoint,
+                        "method": method,
+                        "row_count": len(rows),
+                    },
+                )
             return rows if isinstance(rows, list) else []
         if isinstance(data, list):
             logger.debug("MES returned list rows count=%d", len(data))
+            if str(os.getenv("MES_DEBUG_ROWS", "")).strip().lower() in ("1", "true", "yes", "on"):
+                logger.info(
+                    "MES.rows",
+                    extra={
+                        "endpoint": endpoint,
+                        "method": method,
+                        "row_count": len(data),
+                    },
+                )
             return data
 
         logger.warning("MES returned unexpected JSON structure: %s", type(data))

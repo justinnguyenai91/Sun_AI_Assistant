@@ -12,6 +12,21 @@ __pycache__/
 # Chat test logs
 Backend/tests/chat_test_log_*.txt
 
+# Scratch debug payload dumps
+_analyze_*.json
+
+# Accidental artifact files (from copy/paste)
+\[
+\{
+\[...prev
+
+# Accidental header-dump artifacts in Backend root
+Backend/Accept*
+Backend/Content-*
+Backend/Host*
+Backend/User-Agent*
+Backend/POST
+
 # Large model binaries
 Model/*.gguf
 

@@ -57,6 +57,7 @@ class DecisionEngine:
         # -----------------------------
         group_by = params.pop("group_by", None)
         order_by = params.pop("order_by", None)
+        limit = params.pop("limit", None)
         if not group_by:
             group_by = registry.parse_group_by(raw_query)
 
@@ -80,6 +81,7 @@ class DecisionEngine:
             "filters": params,
             "group_by": group_by,
             "order_by": order_by,
+            "limit": limit,
             "metrics": metrics,
         }
 

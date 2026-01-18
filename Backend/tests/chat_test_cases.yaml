@@ -52,3 +52,150 @@ cases:
         - defect_count
         - defect_ppm
       min_rows: 0
+
+  - id: actual_qty_month_range_vn_cross_year
+    title: "Actual production by month (VN month/year range cross-year)"
+    input: "thong ke san luong thuc te thang tu thang 10/2025 den 1/2026 giup minh nhe"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - user_input
+        - intent
+        - planner_result.data
+        - debug.semantic.params.time_range.from
+        - debug.semantic.params.time_range.to
+      required_columns:
+        - month
+        - totalActualQty
+      optional_columns:
+        - factoryCode
+      min_rows: 1
+
+  - id: actual_qty_month_range_vn_no_thang_prefix
+    title: "Actual production by month (VN month/year range without 'thang' prefix)"
+    input: "thong ke san luong thuc te thang tu 10/2025 den 1/2026"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - debug.semantic.params.time_range.from
+        - debug.semantic.params.time_range.to
+      required_columns:
+        - month
+        - totalActualQty
+      min_rows: 1
+
+  - id: plan_actual_month_range_summary
+    title: "Plan vs actual monthly summary over a range"
+    input: "thong ke san luong ke hoach va thuc te thang tu thang 10/2025 den 1/2026 giup minh nhe"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - debug.semantic.params.time_range.from
+        - debug.semantic.params.time_range.to
+      required_columns:
+        - month
+        - totalPlanQty
+        - totalActualQty
+      optional_columns:
+        - totalDefectQty
+        - avgTactTime
+        - factoryCode
+      min_rows: 1
+
+  - id: actual_qty_week_range_iso
+    title: "Actual qty by ISO week range (experimental)"
+    input: "Actual output by week from 2026-W01 to 2026-W06"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - debug.semantic.params.time_range.from
+        - debug.semantic.params.time_range.to
+      required_columns:
+        - week
+        - totalActualQty
+      min_rows: 1
+
+  - id: plan_achievement_rate_month
+    title: "Plan achievement rate (computed KPI) for month"
+    input: "Ty le dat ke hoach thang 1/2026"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - month
+        - plan_attainment_percent
+      optional_columns:
+        - plan_qty
+        - actual_production_qty
+      min_rows: 1
+
+  - id: yield_rate_by_day_range
+    title: "Yield rate by day (computed KPI)"
+    input: "Yield rate by day from 2026-01-01 to 2026-01-15"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - date
+        - yield_rate
+      optional_columns:
+        - good_qty
+        - actual_production_qty
+        - defect_count
+      min_rows: 1
+
+  - id: defect_rate_percent_month
+    title: "Defect rate percent (computed KPI) for month"
+    input: "Defect rate (%) for Jan 2026"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - month
+        - defect_percent
+      optional_columns:
+        - defect_count
+        - actual_production_qty
+      min_rows: 1
+
+  - id: defect_pareto_top5_symptom
+    title: "Top 5 defect symptoms (Pareto)"
+    input: "Top 5 loai loi nhieu nhat thang 1/2026"
+    context:
+      debug: true
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - symptom
+        - defect_count
+      min_rows: 1

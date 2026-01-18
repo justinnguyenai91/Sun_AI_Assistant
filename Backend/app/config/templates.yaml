@@ -144,6 +144,61 @@ templates:
     viz: table
 
   # ------------------------------------------------------------
+  # PO summary surface: Actual qty (by planDate) for computed KPIs
+  # NOTE: Uses productionOrder/search (smaller dataset vs production-result/details).
+  # ------------------------------------------------------------
+  - id: prod.po.actual.daily
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    group_by: [date]
+    provides: [actual_production_qty]
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPk
+      linePks: linePks
+      modelId: modelId
+      prodStatus: prodStatus
+      processType: processType
+      poType: poType
+    dimension_fields:
+      date: [planDate, plan_date, date]
+    measure:
+      var: actual_production_qty
+      op: sum
+      field: [actualQty, actual_qty, qty, quantity]
+    viz: table
+
+  - id: prod.po.actual.month
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    group_by: [month]
+    provides: [actual_production_qty]
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPk
+      linePks: linePks
+      modelId: modelId
+      prodStatus: prodStatus
+      processType: processType
+      poType: poType
+    dimension_fields:
+      month: [month, planMonth, plan_month, planDate, plan_date, date]
+      date: [planDate, plan_date, date]
+    measure:
+      var: actual_production_qty
+      op: sum
+      field: [actualQty, actual_qty, qty, quantity]
+    viz: table
+
+  # ------------------------------------------------------------
   # Wrapper: Actual production qty (daily)
   # Prefer this so response uses measure-based aggregation (computed path)
   # ------------------------------------------------------------
@@ -332,6 +387,61 @@ templates:
         - defect_count
     viz: table
 
+  # ------------------------------------------------------------
+  # PO summary surface: Defect qty (by planDate) for computed KPIs
+  # NOTE: Uses productionOrder/search to avoid heavy defect detail endpoints.
+  # ------------------------------------------------------------
+  - id: quality.po.defect.daily
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    group_by: [date]
+    provides: [defect_count]
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPk
+      linePks: linePks
+      modelId: modelId
+      prodStatus: prodStatus
+      processType: processType
+      poType: poType
+    dimension_fields:
+      date: [planDate, plan_date, date]
+    measure:
+      var: defect_count
+      op: sum
+      field: [defectQty, defect_qty, ngQty, ng_qty]
+    viz: table
+
+  - id: quality.po.defect.month
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    group_by: [month]
+    provides: [defect_count]
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPk
+      linePks: linePks
+      modelId: modelId
+      prodStatus: prodStatus
+      processType: processType
+      poType: poType
+    dimension_fields:
+      month: [month, planMonth, plan_month, planDate, plan_date, date]
+      date: [planDate, plan_date, date]
+    measure:
+      var: defect_count
+      op: sum
+      field: [defectQty, defect_qty, ngQty, ng_qty]
+    viz: table
+
   - id: quality.process_defect.daily_shift
     entity: defect
     action: statistic
@@ -400,6 +510,109 @@ templates:
         - defectCount
         - defect_count
     viz: table
+
+  # ------------------------------------------------------------
+  # NEW: Raw process defect search v2 (no grouping)
+  # Used as a step for computed Pareto/symptom aggregations.
+  # ------------------------------------------------------------
+  - id: quality.process_defect.raw
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: POST
+    endpoint: /process-defect/search-v2
+    group_by: null
+    provides: [defect_count]
+    fixed_params:
+      pageSize: 1000
+      pageNumber: 0
+      size: 1000
+      page: 0
+    query_params:
+      from: from
+      to: to
+      factoryPks: factoryPks
+      plantPks: plantPks
+      teamPks: teamPks
+      groupPks: groupPks
+      partPks: partPks
+      linePks: linePks
+      processPks: processPks
+    dimension_fields:
+      date:
+        - processDefect.defectDate
+        - processDefect.defectTime
+        - processDefect.occurDate
+        - defectDate
+        - occurDate
+        - createdAt
+        - date
+      symptom:
+        - processDefect.defectSymptomDetail.code
+        - processDefect.defectSymptomDetail.name
+        - processDefect.defectSymptomDetail.defectSymptomClass.code
+        - processDefect.defectSymptomDetail.defectSymptomClass.name
+        - processDefect.defectSymptom.code
+        - processDefect.defectSymptom.name
+        - processDefect.defectType.code
+        - processDefect.defectType.name
+        - processDefect.symptom.code
+        - processDefect.symptom.name
+        - processDefect.defectCode
+        - processDefect.defectName
+        - processDefect.ngReason
+        - symptom.code
+        - symptom.name
+        - defectType.code
+        - defectType.name
+        - defectCode
+        - defectName
+        - ngReason
+        - symptom
+        - defectType
+    measure:
+      var: defect_count
+      op: sum
+      assume_one_if_missing: true
+      field:
+        - processDefect.defectQty
+        - processDefect.defect_qty
+        - processDefect.qty
+        - processDefect.quantity
+        - processDefect.ngQty
+        - processDefect.ng_qty
+        - processDefect.defectCount
+        - processDefect.defect_count
+        - processDefect.value
+        - defectQty
+        - defect_qty
+        - qty
+        - quantity
+        - ngQty
+        - ng_qty
+        - defectCount
+        - defect_count
+    viz: table
+
+  # ------------------------------------------------------------
+  # NEW: Defect symptom/type Pareto (computed)
+  # Aggregates raw defect rows by symptom.
+  # ------------------------------------------------------------
+  - id: quality.process_defect.symptom
+    entity: defect
+    action: statistic
+    type: computed
+    group_by: [symptom]
+    provides: [defect_count]
+    steps:
+      - template_id: quality.process_defect.raw
+        as: defects
+    formula:
+      metric: defect_count
+      formula: "defect_count"
+      variables:
+        defect_count: defects.defect_count
+    viz: bar
 
   # ------------------------------------------------------------
   # NEW: Computed KPI template (defect_ppm per day)

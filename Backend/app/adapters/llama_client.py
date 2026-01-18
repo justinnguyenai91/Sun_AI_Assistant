@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+import asyncio
+
 import httpx
 
 from ..settings import settings
@@ -17,11 +19,48 @@ def _json_or_raw(r: httpx.Response) -> Dict[str, Any]:
     return {"raw": r.text}
 
 
+def _is_loading_model(status_code: int, body: Dict[str, Any]) -> bool:
+    if status_code != 503:
+        return False
+    try:
+        # llama.cpp often returns: {"error": {"message": "Loading model", ...}}
+        err = body.get("error") if isinstance(body, dict) else None
+        msg = None
+        if isinstance(err, dict):
+            msg = err.get("message")
+        if not msg and isinstance(body, dict):
+            msg = body.get("message")
+        if not msg and isinstance(body, dict):
+            msg = body.get("raw")
+        return isinstance(msg, str) and "loading model" in msg.lower()
+    except Exception:
+        return False
+
+
 async def chat(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Proxy OpenAI-compatible chat/completions to llama.cpp server."""
+
+    # llama.cpp can return transient 503 "Loading model" during startup/warmup.
+    # Handle it here so upstream callers don't need bespoke retry logic.
+    max_attempts = 8
+    delay_seconds = 1.0
+    delay_cap = 5.0
+
     async with httpx.AsyncClient(timeout=120) as client:
-        r = await client.post(f"{settings.LLAMA_URL}/v1/chat/completions", json=payload)
-    return {"status": r.status_code, "data": _json_or_raw(r)}
+        last_status = 503
+        last_body: Dict[str, Any] = {"error": {"message": "Loading model"}}
+
+        for attempt in range(1, max_attempts + 1):
+            r = await client.post(f"{settings.LLAMA_URL}/v1/chat/completions", json=payload)
+            body = _json_or_raw(r)
+            if _is_loading_model(r.status_code, body) and attempt < max_attempts:
+                await asyncio.sleep(min(delay_seconds, delay_cap))
+                delay_seconds = min(delay_seconds * 2, delay_cap)
+                last_status, last_body = r.status_code, body
+                continue
+            return {"status": r.status_code, "data": body}
+
+        return {"status": last_status, "data": last_body}
 
 
 async def complete(prompt: str) -> str:

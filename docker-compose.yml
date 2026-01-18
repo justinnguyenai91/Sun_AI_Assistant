@@ -16,7 +16,13 @@ services:
       - ./Backend/.env.docker
     volumes:
       - ./Backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
+    command: >
+      sh -lc '
+        if [ -z "$$EXTERNAL_API_TOKEN" ]; then
+          export EXTERNAL_API_TOKEN="$(grep -m1 "^EXTERNAL_API_TOKEN=" /app/.env.docker | cut -d= -f2- | tr -d "\r")";
+        fi;
+        uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
+      '
     depends_on:
       - model
 

@@ -1,5 +1,6 @@
 import re
 from typing import Dict, Any
+from datetime import date
 
 from .domain_registry import get_registry
 
@@ -85,11 +86,98 @@ class SemanticResolver:
         # Example: "từ tháng 3 đến tháng 9 năm 2025"
         # ------------------------------------------------------------
         time_range = None
+        time_granularity_hint: str | None = None
 
-        # ISO date range: from YYYY-MM-DD to YYYY-MM-DD
-        m_iso = re.search(r"từ\s*(\d{4}-\d{2}-\d{2})\s*đến\s*(\d{4}-\d{2}-\d{2})", raw, re.IGNORECASE)
+        def _safe_last_day_of_month(y: int, m: int) -> int:
+            import calendar
+
+            return calendar.monthrange(y, m)[1]
+
+        def _quarter_to_dates(y: int, q: int) -> Dict[str, str] | None:
+            try:
+                q = int(q)
+                if q < 1 or q > 4:
+                    return None
+                start_m = (q - 1) * 3 + 1
+                end_m = start_m + 2
+                from_date = f"{y:04d}-{start_m:02d}-01"
+                to_date = f"{y:04d}-{end_m:02d}-{_safe_last_day_of_month(y, end_m):02d}"
+                return {"from": from_date, "to": to_date}
+            except Exception:
+                return None
+
+        def _iso_week_range(y1: int, w1: int, y2: int, w2: int) -> Dict[str, str] | None:
+            try:
+                from_d = date.fromisocalendar(int(y1), int(w1), 1)
+                to_d = date.fromisocalendar(int(y2), int(w2), 7)
+                if to_d < from_d:
+                    from_d, to_d = to_d, from_d
+                return {"from": from_d.isoformat(), "to": to_d.isoformat()}
+            except Exception:
+                return None
+
+        # ISO date range: from YYYY-MM-DD to YYYY-MM-DD (supports VN + ASCII)
+        m_iso = re.search(
+            r"(từ|tu|from)\s*(\d{4}-\d{2}-\d{2})\s*(đến|den|to)\s*(\d{4}-\d{2}-\d{2})",
+            raw,
+            re.IGNORECASE,
+        )
         if m_iso:
-            time_range = {"from": m_iso.group(1), "to": m_iso.group(2)}
+            time_range = {"from": m_iso.group(2), "to": m_iso.group(4)}
+
+        # ISO week range: 2026-W01 ~ 2026-W06 (en/vi)
+        if time_range is None:
+            m_w = re.search(
+                r"\b(\d{4})\s*-\s*W\s*(\d{1,2})\s*(?:~|\-|to|đến|den)\s*(\d{4})\s*-\s*W\s*(\d{1,2})\b",
+                raw,
+                re.IGNORECASE,
+            )
+            if m_w:
+                y1, w1 = int(m_w.group(1)), int(m_w.group(2))
+                y2, w2 = int(m_w.group(3)), int(m_w.group(4))
+                tr = _iso_week_range(y1, w1, y2, w2)
+                if tr:
+                    time_range = tr
+
+        # VN week range: "tuần 1 đến tuần 6 của năm 2026"
+        if time_range is None:
+            m_vn_week = re.search(
+                r"tuần\s*(\d{1,2})\s*(?:đến|den)\s*tuần\s*(\d{1,2})\s*(?:của\s*)?(?:năm|nam)\s*(\d{4})",
+                raw,
+                re.IGNORECASE,
+            )
+            if m_vn_week:
+                w1, w2, yy = int(m_vn_week.group(1)), int(m_vn_week.group(2)), int(m_vn_week.group(3))
+                if w2 < w1:
+                    w1, w2 = w2, w1
+                tr = _iso_week_range(yy, w1, yy, w2)
+                if tr:
+                    time_range = tr
+
+        # Quarter: Q1/2026, 2026-Q1, quý 1 năm 2026
+        if time_range is None:
+            m_q1 = re.search(r"\bQ\s*([1-4])\s*[/-]\s*(\d{4})\b", raw, re.IGNORECASE)
+            m_q2 = re.search(r"\b(\d{4})\s*-\s*Q\s*([1-4])\b", raw, re.IGNORECASE)
+            m_q3 = re.search(r"\bquý\s*([1-4])\s*(?:năm|nam)\s*(\d{4})\b", raw, re.IGNORECASE)
+            q = y = None
+            if m_q1:
+                q, y = int(m_q1.group(1)), int(m_q1.group(2))
+            elif m_q2:
+                y, q = int(m_q2.group(1)), int(m_q2.group(2))
+            elif m_q3:
+                q, y = int(m_q3.group(1)), int(m_q3.group(2))
+            if q and y:
+                tr = _quarter_to_dates(y, q)
+                if tr:
+                    time_range = tr
+
+        # Year: "năm 2025" / "year 2025"
+        if time_range is None:
+            m_y = re.search(r"\b(?:năm|nam|year)\s*(\d{4})\b", raw, re.IGNORECASE)
+            if m_y:
+                yy = int(m_y.group(1))
+                time_range = {"from": f"{yy:04d}-01-01", "to": f"{yy:04d}-12-31"}
+                time_granularity_hint = "year"
 
         # VN month range: từ tháng M đến tháng N năm YYYY
         if time_range is None:
@@ -106,11 +194,35 @@ class SemanticResolver:
                 # build YYYY-MM-01 .. YYYY-MM-lastDay
                 from_date = f"{year:04d}-{from_m:02d}-01"
                 # compute last day of month
-                import calendar
-
-                last_day = calendar.monthrange(year, to_m)[1]
+                last_day = _safe_last_day_of_month(year, to_m)
                 to_date = f"{year:04d}-{to_m:02d}-{last_day:02d}"
                 time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
+
+        # VN month/year range (supports cross-year):
+        # - "từ tháng 10/2025 đến 1/2026"
+        # - "tu thang 10/2025 den thang 1/2026"
+        # - "từ 10/2025 đến 01/2026"
+        if time_range is None:
+            m_my = re.search(
+                r"(from|từ|tu)\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})\s*(to|đến|den)\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})",
+                raw,
+                re.IGNORECASE,
+            )
+            if m_my:
+                m1, y1 = int(m_my.group(2)), int(m_my.group(3))
+                m2, y2 = int(m_my.group(5)), int(m_my.group(6))
+                m1 = max(1, min(12, m1))
+                m2 = max(1, min(12, m2))
+                if (y2, m2) < (y1, m1):
+                    y1, m1, y2, m2 = y2, m2, y1, m1
+                import calendar
+
+                from_date = f"{y1:04d}-{m1:02d}-01"
+                last_day = calendar.monthrange(y2, m2)[1]
+                to_date = f"{y2:04d}-{m2:02d}-{last_day:02d}"
+                time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
 
         # ISO month range: from YYYY-MM to YYYY-MM (en/vi)
         if time_range is None:
@@ -128,10 +240,45 @@ class SemanticResolver:
                 last_day = calendar.monthrange(y2, m2)[1]
                 to_date = f"{y2:04d}-{m2:02d}-{last_day:02d}"
                 time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
 
-        # Single VN month marker: tháng MM/YYYY
+        # English month name: "Jan 2026", "January 2026" (and other months)
         if time_range is None:
-            m_one = re.search(r"tháng\s*(\d{1,2})\s*/\s*(\d{4})", raw, re.IGNORECASE)
+            month_map = {
+                "jan": 1,
+                "feb": 2,
+                "mar": 3,
+                "apr": 4,
+                "may": 5,
+                "jun": 6,
+                "jul": 7,
+                "aug": 8,
+                "sep": 9,
+                "oct": 10,
+                "nov": 11,
+                "dec": 12,
+            }
+            m_en_month = re.search(
+                r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\s*(\d{4})\b",
+                raw,
+                re.IGNORECASE,
+            )
+            if m_en_month:
+                key = m_en_month.group(1)[:3].lower()
+                yy = int(m_en_month.group(2))
+                mm = month_map.get(key)
+                if mm:
+                    import calendar
+
+                    from_date = f"{yy:04d}-{mm:02d}-01"
+                    last_day = calendar.monthrange(yy, mm)[1]
+                    to_date = f"{yy:04d}-{mm:02d}-{last_day:02d}"
+                    time_range = {"from": from_date, "to": to_date}
+                    time_granularity_hint = "month"
+
+        # Single VN month marker: tháng/thang MM/YYYY
+        if time_range is None:
+            m_one = re.search(r"(?:tháng|thang)\s*(\d{1,2})\s*/\s*(\d{4})", raw, re.IGNORECASE)
             if m_one:
                 mm = max(1, min(12, int(m_one.group(1))))
                 yy = int(m_one.group(2))
@@ -141,6 +288,7 @@ class SemanticResolver:
                 last_day = calendar.monthrange(yy, mm)[1]
                 to_date = f"{yy:04d}-{mm:02d}-{last_day:02d}"
                 time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
 
         # Fallback: simple relative ranges ("6 tháng", "1 year", "3개월")
         if time_range is None:
@@ -159,6 +307,19 @@ class SemanticResolver:
 
         # Group-by extraction from text via registry (config-driven)
         group_by = registry.parse_group_by(raw)
+
+        # If user asked for a specific month (e.g., "Jan 2026" / "tháng 1/2026")
+        # but didn't specify a grouping dimension, default to monthly buckets.
+        if (not group_by) and time_granularity_hint == "month":
+            group_by = ["month"]
+
+        # Pareto/top defect types intent: when symptom is requested, treat time words as time filters,
+        # not a second grouping dimension.
+        if isinstance(group_by, list) and group_by and "symptom" in group_by:
+            group_by = [g for g in group_by if g not in ("date", "week", "month", "quarter", "year")]
+            if not group_by:
+                group_by = ["symptom"]
+
         if group_by:
             params["group_by"] = group_by
 
@@ -185,6 +346,34 @@ class SemanticResolver:
         # - "xếp theo thực tế giảm dần"
         # ------------------------------------------------------------
         raw_lc = str(raw).lower()
+
+        # ------------------------------------------------------------
+        # Top/Bottom N parsing (ranking-lite)
+        # Examples:
+        # - "Top 5 ..."
+        # - "Worst 10 ..."
+        # - "Top 5 loại lỗi" (Pareto)
+        # This sets limit + a reasonable default order_by if user didn't specify one.
+        # ------------------------------------------------------------
+        limit = None
+        m_top = re.search(r"\b(top|worst|bottom)\s*(\d{1,3})\b", raw_lc, re.IGNORECASE)
+        if m_top:
+            try:
+                limit = int(m_top.group(2))
+                if limit <= 0:
+                    limit = None
+            except Exception:
+                limit = None
+        if limit is None:
+            m_top_vi = re.search(r"\b(top)\s*(\d{1,3})\b", raw_lc, re.IGNORECASE)
+            if m_top_vi:
+                try:
+                    limit = int(m_top_vi.group(2))
+                except Exception:
+                    limit = None
+
+        if isinstance(limit, int) and limit > 0:
+            params["limit"] = limit
 
         def _map_sort_field(text: str):
             if re.search(r"\b(line\s*code|linecode|mã\s*dây\s*chuyền|ma\s*day\s*chuyen)\b", text, re.IGNORECASE):
@@ -214,6 +403,10 @@ class SemanticResolver:
             if re.search(r"\b(plan|planned|kế\s*hoạch|ke\s*hoach)\b", text, re.IGNORECASE):
                 return "totalPlanQty"
             if re.search(r"\b(defect|lỗi|loi)\b", text, re.IGNORECASE):
+                # For quality surface outputs, the metric column is often defect_count.
+                # For PO summary outputs, the metric column is totalDefectQty.
+                if re.search(r"\b(defect\s*count|number\s*of\s*defects|số\s*lỗi|so\s*loi|ng)\b", text, re.IGNORECASE):
+                    return "defect_count"
                 return "totalDefectQty"
             if re.search(r"\b(tact|takt)\b", text, re.IGNORECASE):
                 return "avgTactTime"
@@ -244,6 +437,14 @@ class SemanticResolver:
 
         if sort_field:
             params["order_by"] = {"field": sort_field, "direction": sort_dir or "desc"}
+
+        # If user asked for Top N but didn't specify sorting, pick a sensible default.
+        if isinstance(limit, int) and limit > 0 and "order_by" not in params:
+            # If the query is about defects/symptoms, default to defect_count desc.
+            if re.search(r"\b(defect|lỗi|loi|ppm|ng)\b", raw_lc, re.IGNORECASE):
+                params["order_by"] = {"field": "defect_count", "direction": "desc"}
+            elif re.search(r"\b(actual|thực\s*tế|thuc\s*te)\b", raw_lc, re.IGNORECASE):
+                params["order_by"] = {"field": "actual_production_qty", "direction": "desc"}
 
         out = {
             "intent": intent.get("intent"),

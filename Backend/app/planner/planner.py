@@ -442,6 +442,35 @@ class Planner:
             formula_spec_raw = execution_plan.get("formula") or {}
             formula_specs = formula_spec_raw if isinstance(formula_spec_raw, list) else [formula_spec_raw]
 
+            order_by = (execution_plan or {}).get("order_by")
+            limit = (execution_plan or {}).get("limit")
+
+            debug_steps_stats: Dict[str, Any] = {}
+            debug_agg = str(os.getenv("PLANNER_DEBUG_AGG", "")).strip().lower() in ("1", "true", "yes", "on")
+            debug_info = None
+            if debug_agg and isinstance(data, dict):
+                debug_info = {
+                    "group_by": execution_plan.get("group_by"),
+                    "steps": {
+                        str(alias): {
+                            "rows_in": len(payload.get("rows") or []) if isinstance(payload, dict) and isinstance(payload.get("rows"), list) else 0,
+                            "template_id": (payload.get("plan") or {}).get("template_id") if isinstance(payload, dict) else None,
+                            "endpoint": (payload.get("plan") or {}).get("endpoint") if isinstance(payload, dict) else None,
+                            "method": (payload.get("plan") or {}).get("method") if isinstance(payload, dict) else None,
+                            "sample_date_fields": (
+                                {
+                                    k: (payload.get("rows")[0].get(k) if isinstance(payload.get("rows"), list) and payload.get("rows") and isinstance(payload.get("rows")[0], dict) else None)
+                                    for k in ("date", "actualDate", "actual_date", "occurDate", "planDate", "createdAt")
+                                }
+                                if isinstance(payload, dict)
+                                else None
+                            ),
+                        }
+                        for alias, payload in (data or {}).items()
+                        if isinstance(alias, (str, int))
+                    },
+                }
+
             # Aggregate each step to a per-group series using template-driven measure + dimension_fields
             group_by = execution_plan.get("group_by")
             if isinstance(group_by, str):
@@ -457,10 +486,29 @@ class Planner:
                 if not s:
                     return ""
 
+                # Common non-ISO forms
+                try:
+                    import re
+
+                    # YYYYMMDD -> YYYY-MM-DD
+                    if re.fullmatch(r"\d{8}", s):
+                        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
+
+                    # YYYY-MM-DD HH:MM:SS or YYYY/MM/DD HH:MM:SS -> take date part
+                    if " " in s:
+                        s = s.split(" ", 1)[0].strip()
+
+                    # YYYY/MM/DD -> YYYY-MM-DD
+                    m = re.match(r"^(\d{4})[/-](\d{2})[/-](\d{2})", s)
+                    if m:
+                        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                except Exception:
+                    pass
+
                 # If already a date string, keep it.
-                if len(s) >= 10 and s[4:5] == "-" and s[7:8] == "-":
+                if len(s) >= 10 and (s[4:5] in ("-", "/")) and (s[7:8] in ("-", "/")):
                     if len(s) == 10:
-                        return s
+                        return s.replace("/", "-")
 
                 # Convert ISO timestamps (often UTC 'Z') to local date if configured.
                 if "T" in s:
@@ -478,13 +526,21 @@ class Planner:
                         pass
 
                 # Fallback: best-effort YYYY-MM-DD prefix
-                return s[:10]
+                return s[:10].replace("/", "-")
 
-            def aggregate_step(step_payload: dict) -> Dict[tuple, float]:
+            def aggregate_step(step_alias: str, step_payload: dict) -> Dict[tuple, float]:
                 plan = (step_payload or {}).get("plan") or {}
                 rows = (step_payload or {}).get("rows") or []
                 if not isinstance(rows, list) or not rows:
                     return {}
+
+                debug_agg = str(os.getenv("PLANNER_DEBUG_AGG", "")).strip().lower() in ("1", "true", "yes", "on")
+                total_rows = len(rows)
+                skipped_missing_key = 0
+                derived_time_dim = 0
+
+                # Debug: capture a single sample derivation attempt to explain why time dims may not be derived.
+                sample_time_debug = None
 
                 dim_fields = plan.get("dimension_fields") or {}
                 if not isinstance(dim_fields, dict):
@@ -502,6 +558,59 @@ class Planner:
                     if dim == "date":
                         return ["date", "actualDate", "occurDate", "planDate", "createdAt"]
                     return [dim]
+
+                def _derive_dim_from_date(dim: str, raw_date: Any) -> str | None:
+                    if raw_date is None:
+                        return None
+                    d = _normalize_date_value(raw_date)
+                    if not d:
+                        return None
+                    try:
+                        dt = datetime.fromisoformat(d)
+                    except Exception:
+                        return None
+
+                    if dim == "month":
+                        return f"{dt.year:04d}-{dt.month:02d}"
+                    if dim == "year":
+                        return str(dt.year)
+                    if dim == "quarter":
+                        q = (dt.month - 1) // 3 + 1
+                        return f"{dt.year:04d}-Q{q}"
+                    if dim == "week":
+                        iso_year, iso_week, _ = dt.isocalendar()
+                        return f"{iso_year:04d}-W{iso_week:02d}"
+                    return None
+
+                if debug_agg:
+                    try:
+                        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+                            r0 = rows[0]
+                            for dim in group_dims:
+                                if dim not in ("month", "year", "quarter", "week"):
+                                    continue
+                                raw_date0 = None
+                                for p in ("date", "actualDate", "occurDate", "planDate", "createdAt"):
+                                    v0 = _safe_get_path(r0, p)
+                                    if v0 is not None and str(v0).strip() != "":
+                                        raw_date0 = v0
+                                        break
+                                norm0 = _normalize_date_value(raw_date0) if raw_date0 is not None else ""
+                                err0 = None
+                                try:
+                                    _ = datetime.fromisoformat(norm0) if norm0 else None
+                                except Exception as e:
+                                    err0 = f"{e.__class__.__name__}: {e}"
+                                sample_time_debug = {
+                                    "dim": dim,
+                                    "raw_date": raw_date0,
+                                    "normalized": norm0,
+                                    "derived": _derive_dim_from_date(dim, raw_date0),
+                                    "parse_error": err0,
+                                }
+                                break
+                    except Exception:
+                        sample_time_debug = None
 
                 measure = plan.get("measure") or {}
                 if not isinstance(measure, dict):
@@ -550,6 +659,21 @@ class Planner:
                             if v is not None and str(v).strip() != "":
                                 dim_val = str(v)
                                 break
+
+                        # Derive higher-level time dims from any available date field.
+                        if (dim_val is None or str(dim_val).strip() == "") and dim in ("month", "year", "quarter", "week"):
+                            raw_date = None
+                            for p in _candidates_for_dim("date"):
+                                v = _safe_get_path(r, p)
+                                if v is not None and str(v).strip() != "":
+                                    raw_date = v
+                                    break
+                            derived = _derive_dim_from_date(dim, raw_date)
+                            if derived:
+                                dim_val = derived
+                                if debug_agg:
+                                    derived_time_dim += 1
+
                         if dim_val is None:
                             default_val = dim_defaults.get(dim)
                             if default_val is not None and str(default_val).strip() != "":
@@ -561,6 +685,8 @@ class Planner:
                         key_parts.append(dim_val)
                     # skip rows that don't have group keys
                     if any(x == "" for x in key_parts):
+                        if debug_agg:
+                            skipped_missing_key += 1
                         continue
 
                     key = tuple(key_parts)
@@ -573,13 +699,32 @@ class Planner:
                     if num is None:
                         continue
                     out[key] = float(out.get(key, 0.0) + num)
+
+                if debug_agg:
+                    try:
+                        debug_steps_stats[str(step_alias)] = {
+                            "group_dims": group_dims,
+                            "rows_in": total_rows,
+                            "groups_out": len(out),
+                            "skipped_missing_key": skipped_missing_key,
+                            "derived_time_dim": derived_time_dim,
+                            "template_id": plan.get("template_id"),
+                            "endpoint": plan.get("endpoint"),
+                            "method": plan.get("method"),
+                            "sample_time": sample_time_debug,
+                        }
+                    except Exception:
+                        pass
                 return out
 
             step_series: Dict[str, Dict[tuple, float]] = {}
             for alias, payload in (data or {}).items() if isinstance(data, dict) else []:
                 if not isinstance(payload, dict):
                     continue
-                step_series[str(alias)] = aggregate_step(payload)
+                step_series[str(alias)] = aggregate_step(str(alias), payload)
+
+            if debug_info is not None and debug_steps_stats:
+                debug_info["agg"] = debug_steps_stats
 
             # Union all group keys across step series
             all_keys = set()
@@ -615,7 +760,8 @@ class Planner:
                 for alias, series in step_series.items():
                     base_vars[alias] = series.get(key)
 
-                # Evaluate each requested formula
+                # Evaluate each requested formula (support computed-on-computed dependencies)
+                computed_values: Dict[str, Any] = {}
                 for spec in formula_specs:
                     if not isinstance(spec, dict):
                         continue
@@ -646,8 +792,21 @@ class Planner:
                     base_values: Dict[str, Any] = {}
                     missing_hard = False
                     for var_name, ref in var_map.items():
-                        alias = str(ref).split(".", 1)[0] if isinstance(ref, str) else None
-                        v = base_vars.get(alias) if alias else None
+                        # Dynamic computed plans use step alias == base metric id.
+                        # So the dependency variable (e.g. plan_qty) should read from base_vars["plan_qty"].
+                        step_key = None
+                        if isinstance(ref, str) and ref.strip():
+                            step_key = ref.split(".", 1)[0].strip()
+                        if not step_key:
+                            step_key = str(var_name)
+
+                        v = base_vars.get(step_key)
+                        # Allow referencing a metric computed earlier in this row (e.g., good_qty)
+                        if v is None:
+                            if step_key in computed_values:
+                                v = computed_values.get(step_key)
+                            elif step_key in row:
+                                v = row.get(step_key)
                         if v is None:
                             if _metric_missing_as_zero(str(var_name)):
                                 v = 0.0
@@ -672,12 +831,63 @@ class Planner:
                     else:
                         row[metric_name] = value
 
+                    computed_values[metric_name] = row.get(metric_name)
+
                 rows_out.append(row)
 
-            return {"data": rows_out, "count": len(rows_out)}
+            # Apply optional order_by + limit for computed outputs (Top N / Pareto)
+            try:
+                def _apply_order_by(rows, ob):
+                    if not isinstance(rows, list) or not rows:
+                        return rows
+                    if not isinstance(ob, dict):
+                        return rows
+                    field = ob.get("field")
+                    if not field or not isinstance(field, str):
+                        return rows
+                    direction = str(ob.get("direction") or "desc").lower()
+                    reverse = direction != "asc"
+
+                    def key_fn(r):
+                        if not isinstance(r, dict):
+                            return float("-inf") if reverse else float("inf")
+                        v = r.get(field)
+                        if v is None:
+                            return float("-inf") if reverse else float("inf")
+                        if isinstance(v, (int, float)):
+                            return float(v)
+                        try:
+                            return float(str(v).replace(",", ""))
+                        except Exception:
+                            return str(v)
+
+                    rows.sort(key=key_fn, reverse=reverse)
+                    return rows
+
+                def _apply_limit(rows, lim):
+                    if not isinstance(rows, list) or not rows:
+                        return rows
+                    try:
+                        n = int(lim)
+                    except Exception:
+                        return rows
+                    if n <= 0:
+                        return rows
+                    return rows[:n]
+
+                rows_out = _apply_order_by(rows_out, order_by)
+                rows_out = _apply_limit(rows_out, limit)
+            except Exception:
+                pass
+
+            out = {"data": rows_out, "count": len(rows_out)}
+            if debug_info is not None:
+                out["_debug"] = debug_info
+            return out
         # If caller requested grouping, perform simple aggregations here
         group_by = (execution_plan or {}).get("group_by") if execution_plan else None
         order_by = (execution_plan or {}).get("order_by") if execution_plan else None
+        limit = (execution_plan or {}).get("limit") if execution_plan else None
 
         def _apply_order_by(rows, ob):
             if not isinstance(rows, list) or not rows:
@@ -710,6 +920,17 @@ class Planner:
                 # keep original order if sorting fails
                 return rows
             return rows
+
+        def _apply_limit(rows, lim):
+            if not isinstance(rows, list) or not rows:
+                return rows
+            try:
+                n = int(lim)
+            except Exception:
+                return rows
+            if n <= 0:
+                return rows
+            return rows[:n]
 
         def _normalize_group_by(gb):
             if gb is None:
@@ -946,12 +1167,11 @@ class Planner:
                 })
 
             result = _apply_order_by(result, order_by)
+            result = _apply_limit(result, limit)
             return {"data": result, "count": len(result)}
 
         # Generic multi-dimension aggregation (config-driven group_by list)
         if isinstance(group_by, list) and len(group_by) > 0:
-            from datetime import datetime
-
             def primitive_key(value):
                 """Return a hashable, stable key for grouping.
 

@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Optional
 
 import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,13 @@ class LLMIntentParser:
 
         # 2. LLM-based parsing (fallback)
         if self.enable_llm and self.llm_client is not None:
-            intent = await self._llm_parse(query)
-            logger.debug("IntentParser.llm.used", extra={"intent": intent})
-            return intent
+            try:
+                intent = await self._llm_parse(query)
+                logger.debug("IntentParser.llm.used", extra={"intent": intent})
+                return intent
+            except Exception as e:
+                # Never hard-fail the whole /analyze path due to LLM availability.
+                logger.warning("IntentParser.llm.failed: %s", e)
 
         # 3. Hard fallback
         logger.warning("IntentParser.fallback.default")
@@ -68,13 +73,45 @@ class LLMIntentParser:
 
         q = query.lower().strip()
 
+        def _strip_accents(s: str) -> str:
+            try:
+                nfkd = unicodedata.normalize("NFD", s)
+                return "".join(ch for ch in nfkd if unicodedata.category(ch) != "Mn")
+            except Exception:
+                return s
+
+        q_ascii = _strip_accents(q)
+
         # Report/statistics intent (vi/en/ko) to reduce reliance on LLM correctness.
-        if re.search(r"(thống\s*kê|báo\s*cáo|report|statistic|statistics|stats|analytics|통계|보고서|sản\s*lượng|năng\s*suất|productivity|production\s*(output)?|output|생산량|생산)", q):
+        # Include KPI/rate-style queries that do not explicitly say "report".
+        is_reportish = bool(
+            re.search(
+                r"(thống\s*kê|báo\s*cáo|report|statistic|statistics|stats|analytics|통계|보고서|sản\s*lượng|năng\s*suất|productivity|production\s*(output)?|output|생산량|생산|yield|tỷ\s*lệ|ti\s*lệ|ty\s*le|rate|ratio|achievement|attainment|đạt\s*kế\s*hoạch|dat\s*ke\s*hoach|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+)",
+                q,
+            )
+            or re.search(
+                r"(thong\s*ke|bao\s*cao|report|statistic|statistics|stats|analytics|san\s*luong|nang\s*suat|productivity|production\s*(output)?|output|yield|ti\s*le|ty\s*le|rate|ratio|achievement|attainment|dat\s*ke\s*hoach|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+)",
+                q_ascii,
+            )
+            or re.search(r"(defect|lỗi|loi|불량|\bppm\b)", q)
+            or re.search(r"(defect|loi|\bppm\b)", q_ascii)
+        )
+
+        if is_reportish:
             entity: Optional[str] = None
             # Prefer defect when query includes defect/ppm terms.
-            if re.search(r"(defect|lỗi|loi|불량|\bppm\b)", q):
+            if re.search(r"(defect|lỗi|loi|불량|\bppm\b)", q) or re.search(r"(defect|loi|\bppm\b)", q_ascii):
                 entity = "defect"
-            elif re.search(r"(sản\s*lượng|năng\s*suất|productivity|production\s*(output)?|output|생산량|생산)", q):
+            elif re.search(
+                r"(sản\s*lượng|năng\s*suất|productivity|production\s*(output)?|output|생산량|생산)",
+                q,
+            ) or re.search(r"(san\s*luong|nang\s*suat|productivity|production\s*(output)?|output)", q_ascii):
+                entity = "sản lượng"
+            elif re.search(r"(yield|tỷ\s*lệ|ti\s*lệ|ty\s*le|rate|ratio|achievement|attainment|đạt\s*kế\s*hoạch|dat\s*ke\s*hoach)", q) or re.search(
+                r"(yield|ti\s*le|ty\s*le|rate|ratio|achievement|attainment|dat\s*ke\s*hoach)",
+                q_ascii,
+            ):
+                # KPI queries are typically production-domain unless they are explicitly defect-related.
                 entity = "sản lượng"
 
             return {

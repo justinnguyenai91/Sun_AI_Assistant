@@ -53,7 +53,9 @@ dimensions:
     canonical: month
     synonyms:
       - tháng
+      - thang
       - theo tháng
+      - theo thang
       - month
       - by month
       - per month
@@ -154,6 +156,23 @@ dimensions:
       - by process
       - by process type
       - 공정
+
+  symptom:
+    canonical: symptom
+    synonyms:
+      - symptom
+      - defect symptom
+      - symptom lỗi
+      - symptom loi
+      - loại lỗi
+      - loai loi
+      - dạng lỗi
+      - dang loi
+      - defect type
+      - defect types
+      - type of defect
+      - error type
+      - pareto
 slots:
   time_range:
     type: period
@@ -187,9 +206,13 @@ metrics:
     canonical: actual_production_qty
     synonyms:
       - sản lượng thực tế
+      - san luong thuc te
       - sản lượng sản xuất thực tế
+      - san luong san xuat thuc te
       - sản lượng sx thực tế
+      - san luong sx thuc te
       - sl thực tế
+      - sl thuc te
       - actual qty
       - actual quantity
       - actual output
@@ -203,12 +226,57 @@ metrics:
     synonyms:
       - số lỗi
       - số lượng lỗi
+      - ng
+      - hàng lỗi
+      - hang loi
+      - reject
+      - reject qty
+      - reject quantity
+      - scrap
+      - scrap qty
       - defect count
       - number of defects
       - quantity of defects
     unit: pcs
     entity: defect
     missing_as_zero: true
+
+  good_qty:
+    canonical: good_qty
+    synonyms:
+      - hàng ok
+      - hang ok
+      - số lượng ok
+      - so luong ok
+      - good qty
+      - good quantity
+      - ok quantity
+    unit: pcs
+    entity: production
+    precision: 0
+    formula: "actual_production_qty - defect_count"
+    depends_on:
+      - actual_production_qty
+      - defect_count
+
+  yield_rate:
+    canonical: yield_rate
+    synonyms:
+      - yield
+      - yield rate
+      - good rate
+      - tỷ lệ đạt chất lượng
+      - ty le dat chat luong
+      - tỷ lệ ok
+      - ty le ok
+      - quality rate
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "(good_qty / actual_production_qty) * 100"
+    depends_on:
+      - good_qty
+      - actual_production_qty
 
   # -----------------------------
   # Computed KPIs (derived via formula)

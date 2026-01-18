@@ -2,6 +2,7 @@ import os, uuid, time
 import re
 import logging
 import httpx
+import unicodedata
 
 from fastapi import FastAPI, Header, HTTPException,Request
 from slowapi.middleware import SlowAPIMiddleware
@@ -24,8 +25,6 @@ from app.adapters import llama_client, ollama_client
 from app.intent.intent_pipeline import intent_parser
 
 logger = logging.getLogger(__name__)
-# settings.py (đầu file)
-print("[CFG] RATE_LIMIT =", settings.RATE_LIMIT)
 # instantiate runtime planner with components (mock adapter for API-first testing)
 planner = PlannerClass(SemanticResolver(), DecisionEngine(), ApiDataAdapter())
 app = FastAPI(title="Sun Gateway", version="0.1")
@@ -60,6 +59,13 @@ async def chat(request: Request, body: ChatRequest, authorization: str | None = 
         r = await llama_client.chat(payload)
 
     if r["status"] != 200:
+        # Preserve transient LLM loading state (503) so the UI can retry.
+        if int(r["status"]) == 503:
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "llm_loading", "upstream": r.get("data")},
+                headers={"Retry-After": "2"},
+            )
         raise HTTPException(502, f"Backend error {r['status']}: {r['data']}")
 
     data = r["data"]
@@ -125,6 +131,15 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
             t = (text or "").strip().lower()
             if not t:
                 return False
+
+            def _strip_accents(s: str) -> str:
+                try:
+                    nfkd = unicodedata.normalize("NFD", s)
+                    return "".join(ch for ch in nfkd if unicodedata.category(ch) != "Mn")
+                except Exception:
+                    return s
+
+            t_ascii = _strip_accents(t)
             # If user is clearly requesting a render-only command, DO NOT treat as data request.
             if re.search(r"\b(chart|graph|plot|vẽ\s*chart|vẽ\s*đồ\s*thị|hiện\s*bảng|show\s*table)\b", t):
                 # Render commands are handled in frontend.
@@ -133,12 +148,9 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
             if _parse_ui_command(text) is not None:
                 return False
             # Data-ish keywords (vi/en)
-            return bool(
-                re.search(
-                    r"(thống\s*kê|báo\s*cáo|report|statistic|statistics|stats|analytics|query|truy\s*vấn|sản\s*lượng|năng\s*suất|productivity|production|output|defect|lỗi|yield|tact|line|by\s+line|per\s+line|dây\s*chuyền|model|by\s+model|per\s+model|factory|from\s+\d{4}|\d+\s*(tháng|month|năm|year)|통계|생산|생산량|불량|라인|개월)",
-                    t,
-                )
-            )
+            patt = r"(thống\s*kê|báo\s*cáo|report|statistic|statistics|stats|analytics|query|truy\s*vấn|sản\s*lượng|năng\s*suất|productivity|production|output|defect|lỗi|yield|tact|line|by\s+line|per\s+line|dây\s*chuyền|model|by\s+model|per\s+model|factory|from\s+\d{4}|\d+\s*(tháng|month|năm|year)|(?:tháng|thang)\s*\d{1,2}\s*/\s*\d{4}|tỷ\s*lệ|ti\s*lệ|ty\s*le|đạt\s*kế\s*hoạch|dat\s*ke\s*hoach|defect\s*rate|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+|\bppm\b|통계|생산|생산량|불량|라인|개월)"
+            patt_ascii = r"(thong\s*ke|bao\s*cao|truy\s*van|san\s*luong|nang\s*suat|day\s*chuyen|loi|nha\s*may|xuong|report|statistic|statistics|stats|analytics|query|production|output|defect|yield|tact|line|model|factory|from\s+\d{4}|\d+\s*(thang|month|nam|year)|thang\s*\d{1,2}\s*/\s*\d{4}|ti\s*le|ty\s*le|dat\s*ke\s*hoach|defect\s*rate|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+|\bppm\b)"
+            return bool(re.search(patt, t) or re.search(patt_ascii, t_ascii))
 
         async def _chat_via_llm(text: str) -> str:
             system_prompt = (
@@ -193,6 +205,34 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
                     "chat_text": assistant_text,
                 }
             )
+
+        # ------------------------------------------------------
+        # Data path requires MES access token (env or per-request)
+        # ------------------------------------------------------
+        try:
+            token_ctx = None
+            if isinstance(context, dict):
+                token_ctx = (
+                    context.get("mesToken")
+                    or context.get("mes_token")
+                    or context.get("externalApiToken")
+                    or context.get("external_api_token")
+                )
+            token_env = os.getenv("EXTERNAL_API_TOKEN") or os.getenv("MES_API_TOKEN")
+            if (not isinstance(token_env, str) or not token_env.strip()) and (
+                not isinstance(token_ctx, str) or not token_ctx.strip()
+            ):
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "error": "mes_missing_access_token",
+                        "detail": "MES returned UNAUTHORIZED previously. Set EXTERNAL_API_TOKEN in Backend/.env.docker (service mode) or pass context.mesToken (per-request mode).",
+                        "request_id": getattr(request.state, "request_id", None),
+                    },
+                )
+        except Exception:
+            # Never block on validation logic; planner will handle failures.
+            pass
         
         # -----------------------
         # 1️⃣ Intent Parser (LLM + rule-based)
@@ -208,6 +248,12 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
         planner_response = await planner.execute(planner_request)
         decision = planner_response
         result = planner_response.get("data", [])
+        result_count = None
+        try:
+            if isinstance(planner_response, dict) and planner_response.get("count") is not None:
+                result_count = int(planner_response.get("count"))
+        except Exception:
+            result_count = None
 
         debug_payload = None
         if isinstance(context, dict) and context.get("debug") is True:
@@ -234,6 +280,10 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
                         "provides": execution_plan.get("provides"),
                     },
                 }
+
+                # Surface planner internal debug if available (env-gated in planner).
+                if isinstance(planner_response, dict) and planner_response.get("_debug") is not None:
+                    debug_payload["planner"] = planner_response.get("_debug")
             except Exception as _:
                 debug_payload = {"error": "debug_plan_failed"}
 
@@ -251,7 +301,7 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
             "user_input": user_input,
             "intent": intent,
             "decision": decision,
-            "planner_result": {"data": result, "count": len(result)},
+            "planner_result": {"data": result, "count": (result_count if result_count is not None else len(result))},
             "chat_backend": chat_backend,
             **({"debug": debug_payload} if debug_payload is not None else {}),
         })
@@ -260,12 +310,12 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
         logger.exception("ERROR in /analyze")
         rid = getattr(request.state, "request_id", None)
         msg = str(e) or e.__class__.__name__
-        # If the LLM/model is still loading or returning 503, surface a 503 with Retry-After
+        # If the LLM/model is still loading or returning 503, surface a 503 with small Retry-After
         if "loading model" in msg.lower() or "503" in msg or "unavailable" in msg.lower():
             return JSONResponse(
                 status_code=503,
                 content={"error": "llm_unavailable", "detail": msg, "request_id": rid},
-                headers={"Retry-After": "30"},
+                headers={"Retry-After": "2"},
             )
         if isinstance(e, httpx.TimeoutException) or "readtimeout" in msg.lower() or "timed out" in msg.lower():
             return JSONResponse(
