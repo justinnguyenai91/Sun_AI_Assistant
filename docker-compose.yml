@@ -12,17 +12,13 @@ services:
     container_name: sun_backend
     ports:
       - "19000:9000"
-    env_file:
-      - ./Backend/.env.docker
-    volumes:
-      - ./Backend:/app
-    command: >
-      sh -lc '
-        if [ -z "$$EXTERNAL_API_TOKEN" ]; then
-          export EXTERNAL_API_TOKEN="$(grep -m1 "^EXTERNAL_API_TOKEN=" /app/.env.docker | cut -d= -f2- | tr -d "\r")";
-        fi;
-        uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
-      '
+    environment:
+      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN:-dev-key-123}
+      - MES_FACTORY_BASE_URLS=${MES_FACTORY_BASE_URLS:-}
+      - LLM_URL=http://model:8080/v1/chat/completions
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    command: uvicorn app.main:app --host 0.0.0.0 --port 9000
     depends_on:
       - model
       - redis
