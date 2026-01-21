@@ -157,10 +157,8 @@ class DecisionEngine:
 
         # Provide a reasonable default viz if template didn't set it
         if not plan.get("viz"):
-            # tables for raw queries, bar for aggregations
-            # Exception: defect symptom queries should use table, not chart
-            group_by = plan.get("group_by")
-            is_symptom_only = isinstance(group_by, list) and "symptom" in group_by
-            plan["viz"] = "table" if (plan.get("group_by") in (None, "", []) or is_symptom_only) else "bar"
+            # Default to table for all statistical queries
+            # Only use chart when explicitly requested by user
+            plan["viz"] = "table"
 
         return plan

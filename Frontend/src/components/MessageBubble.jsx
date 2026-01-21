@@ -328,9 +328,22 @@ function ChartMessage({ rows, decision, locale, chartSpec }) {
     );
   }
 
+  // Fallback to table when chart cannot be rendered
+  if (Array.isArray(rows) && rows.length > 0) {
+    return (
+      <TableMessage
+        rows={rows}
+        locale={locale}
+        hiddenColumns={[]}
+        visibleColumns={null}
+        groupBy={decision?.group_by || null}
+      />
+    );
+  }
+
   const msg = String(locale || "en").toLowerCase().startsWith("vi")
-    ? "Không thể vẽ chart cho dữ liệu này. Hãy yêu cầu thống kê theo line (vd: ‘thống kê sản lượng 3 tháng theo line’)."
-    : "Cannot render a chart for this dataset. Ask for a report grouped by line (e.g., 'production report by line for last 3 months').";
+    ? "Không có dữ liệu để hiển thị."
+    : "No data to display.";
 
   return <div className="muted">{msg}</div>;
 }

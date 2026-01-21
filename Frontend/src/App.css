@@ -319,9 +319,8 @@
   gap: 12px;
   padding: 20px 24px;
   border-top: none;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.98);
+  /* backdrop-filter removed to prevent flickering */
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.04);
 }
 

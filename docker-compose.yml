@@ -12,28 +12,8 @@ services:
     container_name: sun_backend
     ports:
       - "19000:9000"
-    environment:
-      # Required MES API settings
-      - EXTERNAL_API_BASE_URL=${EXTERNAL_API_BASE_URL:-http://58.84.1.104:9082}
-      - EXTERNAL_API_PREFIX=${EXTERNAL_API_PREFIX:-/api/rest/v1}
-      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN:-dev-key-123}
-      - EXTERNAL_API_TIMEOUT=120
-      - MES_FACTORY_BASE_URLS=${MES_FACTORY_BASE_URLS:-}
-      # LLM settings
-      - BACKEND=llama
-      - LLAMA_URL=http://model:8080
-      # Redis settings
-      - REDIS_URL=redis://redis:6379/0
-      - REDIS_ENABLED=true
-      # Database settings
-      - DATABASE_URL=postgresql://sun_user:sun_pass_2026@postgres:5432/sun_mes
-      - DATABASE_ENABLED=true
-      # API settings
-      - API_KEYS=dev-key-123,internal-abc
-      - RATE_LIMIT=300
-      - ALLOW_ORIGINS=*
-      - LOCAL_TZ_OFFSET_HOURS=7
-      - PORT=9000
+    env_file:
+      - ./Backend/.env.docker
     command: uvicorn app.main:app --host 0.0.0.0 --port 9000
     depends_on:
       - model

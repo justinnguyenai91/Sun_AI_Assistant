@@ -199,3 +199,1241 @@ cases:
         - symptom
         - defect_count
       min_rows: 1
+  # -----------------------------
+  # New Test Cases for Enhanced Features
+  # -----------------------------
+  
+  - id: achievement_rate_by_line
+    title: "Achievement rate by line with computed metrics"
+    input: "Tỷ lệ đạt kế hoạch của nhà máy FAC01 theo line từ tháng 6/2025 đến 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - line
+        - month
+      optional_columns:
+        - plan_qty
+        - actual_production_qty
+        - plan_attainment_percent
+      min_rows: 1
+
+  - id: multi_turn_context_factory
+    title: "Multi-turn conversation - factory context persistence"
+    input: "Báo cáo sản lượng tháng 1/2026 nhé"
+    context:
+      factoryCode: FAC01
+      session_id: test_session_001
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - session_id
+      min_rows: 0
+
+  - id: multi_turn_follow_up
+    title: "Multi-turn conversation - follow up without factory code"
+    input: "Còn tháng 12 năm 2025 thì sao?"
+    context:
+      factoryCode: FAC01
+      session_id: test_session_001
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - session_id
+      min_rows: 0
+
+  - id: defect_rate_with_insights
+    title: "Defect rate analysis with proactive insights"
+    input: "Thống kê tỷ lệ lỗi theo line tháng 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - insights.insights
+        - insights.suggestions
+      optional_columns:
+        - defectRate
+        - defect_rate_percent
+      min_rows: 0
+
+  - id: oee_calculation
+    title: "OEE calculation with computed metrics"
+    input: "Tính OEE của các dây chuyền tháng 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      optional_columns:
+        - oee
+        - efficiency
+        - yieldRate
+      min_rows: 0
+
+  - id: yield_rate_by_model
+    title: "Yield rate analysis by model"
+    input: "Tỷ lệ yield theo model từ tháng 6/2025 đến 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      optional_columns:
+        - modelCode
+        - yieldRate
+        - yield_percent
+      min_rows: 0
+
+  - id: top_performers_pareto
+    title: "Top performers Pareto analysis"
+    input: "Top 10 line có tỷ lệ đạt kế hoạch cao nhất tháng 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - line
+      optional_columns:
+        - plan_qty
+        - actual_production_qty
+        - plan_attainment_percent
+      min_rows: 1
+
+  - id: production_trend_daily
+    title: "Daily production trend"
+    input: "Xu hướng sản lượng hàng ngày từ 2026-01-01 đến 2026-01-15"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - date
+      optional_columns:
+        - totalActualQty
+        - achievementRate
+      min_rows: 1
+
+  - id: weekly_summary
+    title: "Weekly production summary"
+    input: "Tổng hợp sản xuất theo tuần tháng 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      required_columns:
+        - week
+      optional_columns:
+        - totalPlanQty
+        - totalActualQty
+      min_rows: 1
+
+  - id: model_comparison
+    title: "Model comparison analysis"
+    input: "So sánh các model về sản lượng và lỗi tháng 1/2026"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      optional_columns:
+        - modelCode
+        - totalPlanQty
+        - totalActualQty
+        - defectRate
+      min_rows: 0
+
+  - id: bilingual_english_query
+    title: "English query support"
+    input: "Show me production achievement rate by line for January 2026"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      optional_columns:
+        - achievementRate
+      min_rows: 0
+
+  - id: anomaly_detection
+    title: "Anomaly detection in insights"
+    input: "Phân tích hiệu suất các line tháng 1/2026, có line nào bất thường không?"
+    context:
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - insights
+      min_rows: 0
+  # ========================================
+  # Bug Fix Test Cases - January 18, 2026
+  # ========================================
+
+  - id: vietnamese_column_names_locale_vi
+    title: "Bug Fix #1: Vietnamese column names when locale=vi"
+    input: "Tỷ lệ đạt kế hoạch FAC01 theo line tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: english_column_names_locale_en
+    title: "Bug Fix #1: English column names when locale=en"
+    input: "Achievement rate by line for January 2026"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: followup_the_con_thang
+    title: "Bug Fix #2: Follow-up 'thế còn tháng X'"
+    input: "thế còn tháng 12/2025"
+    context:
+      factoryCode: FAC01
+      locale: vi
+      session_id: test_followup_1
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: followup_con_thang_thi_sao
+    title: "Bug Fix #2: Follow-up 'còn tháng X thì sao'"
+    input: "còn tháng 11/2025 thì sao"
+    context:
+      factoryCode: FAC01
+      locale: vi
+      session_id: test_followup_2
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: followup_short_month
+    title: "Bug Fix #2: Follow-up short month reference"
+    input: "tháng 10 thì sao"
+    context:
+      factoryCode: FAC01
+      locale: vi
+      session_id: test_followup_3
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: followup_english_how_about
+    title: "Bug Fix #2: English follow-up 'how about'"
+    input: "how about December 2025"
+    context:
+      factoryCode: FAC01
+      locale: en
+      session_id: test_followup_4
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: followup_what_about
+    title: "Bug Fix #2: English follow-up 'what about'"
+    input: "what about November 2025"
+    context:
+      factoryCode: FAC01
+      locale: en
+      session_id: test_followup_5
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: multi_turn_three_queries
+    title: "Bug Fix #2: Multi-turn conversation with context"
+    input: "Báo cáo sản lượng FAC01 tháng 1/2026"
+    context:
+      locale: vi
+      session_id: test_multi_1
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - session_id
+      min_rows: 0
+
+  - id: computed_metrics_vietnamese
+    title: "Bug Fix #1: All computed metrics in Vietnamese"
+    input: "Báo cáo chi tiết FAC01 theo line tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      min_rows: 0
+
+  - id: insights_with_vietnamese_locale
+    title: "Bug Fix #1: Insights in Vietnamese"
+    input: "Phân tích xu hướng sản lượng FAC01 tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - insights
+      min_rows: 0
+
+  - id: session_persistence_test
+    title: "Bug Fix #3: Session context persistence"
+    input: "Báo cáo FAC01 từ tháng 10/2025 đến 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+      session_id: test_persist_1
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - session_id
+      min_rows: 0
+  - id: no_duplicate_columns_vi
+    title: "Bug Fix #4: No duplicate columns in Vietnamese"
+    input: "Báo cáo sản lượng FAC01 tháng 1/2026"
+    context:
+      locale: vi
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Verify no duplicate columns like "Tỷ lệ đạt" AND "Achievement %"
+      no_duplicate_columns:
+        - ["Tỷ lệ đạt %", "Achievement %"]
+        - ["Lỗi %", "Defect %"]
+        - ["OEE %", "oee"]
+      min_rows: 0
+
+  - id: no_duplicate_columns_en
+    title: "Bug Fix #4: No duplicate columns in English"
+    input: "Report production FAC01 January 2026"
+    context:
+      locale: en
+      factoryCode: FAC01
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Should only have English columns, no Vietnamese
+      no_columns:
+        - "Tỷ lệ đạt"
+        - "Lỗi %"
+        - "Hiệu suất"
+      min_rows: 0
+
+  - id: handle_404_gracefully
+    title: "Bug Fix #5: Handle 404 as no data, not error"
+    input: "Báo cáo sản lượng FAC01 tháng 12/2025"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Should return 200 even if MES API returns 404
+      # Data may be empty or have zeros
+      min_rows: 0
+
+  - id: context_inherit_factory
+    title: "Bug Fix #6: Context - inherit factoryCode from previous query"
+    input: "Báo cáo sản lượng FAC01 tháng 1/2026"
+    context:
+      session_id: ctx_inherit_001
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - decision.filters.factoryCode
+      min_rows: 0
+
+  - id: context_followup_no_factory
+    title: "Bug Fix #6: Context - follow-up query without factory code"
+    input: "thế còn tháng 11/2025"
+    context:
+      session_id: ctx_inherit_001
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Should inherit FAC01 from previous query in same session
+      min_rows: 0
+
+  - id: fill_missing_months
+    title: "Bug Fix #7: Fill missing months in time range"
+    input: "Báo cáo sản lượng từ tháng 09/2025 đến 01/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Should have 5 months (09, 10, 11, 12, 01) even if some have no data
+      min_rows: 5
+      required_columns:
+        - month
+      # Check all months are present
+      contains_values:
+        month:
+          - "2025-09"
+          - "2025-10"
+          - "2025-11"
+          - "2025-12"
+          - "2026-01"
+
+  - id: default_entity_time_range
+    title: "Bug Fix #7: Default entity to production for time range query"
+    input: "Kiểm tra từ tháng 10/2025 đến 12/2025"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - decision.entity
+      # Should default to 'production' entity
+      json_equals:
+        decision.entity: "production"
+      min_rows: 0
+
+  - id: time_range_cross_year
+    title: "Bug Fix #7: Time range across year boundary"
+    input: "Báo cáo FAC01 từ tháng 11/2025 đến tháng 2/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+      # Should have 4 months (11, 12, 01, 02)
+      min_rows: 4
+      contains_values:
+        month:
+          - "2025-11"
+          - "2025-12"
+          - "2026-01"
+          - "2026-02"
+
+  # ============================================================
+  # Bug Fix #8: Defect symptom breakdown ("lỗi nào nhiều nhất")
+  # ============================================================
+  - id: defect_symptom_most_common_vi
+    title: "Bug Fix #8: Defect symptom breakdown - Vietnamese"
+    input: "Thống kê 3 tháng gần nhất lỗi nào nhiều nhất"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - decision.order_by
+        - decision.limit
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.template_id: "quality.process_defect.symptom"
+        decision.limit: 10
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      # Symptom should contain both code and name (format: "CODE - NAME")
+      # Example: "AH00002 - Cắt sai vị trí"
+      min_rows: 1
+      # Verify symptom field contains dash separator (indicates code - name format)
+      custom_validation: symptom_has_name_format
+
+  - id: defect_symptom_top5
+    title: "Bug Fix #8: Top 5 defect types"
+    input: "Top 5 loại lỗi nhiều nhất FAC01"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.limit: 5
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 1
+
+  - id: defect_symptom_which_error_en
+    title: "Bug Fix #8: Which error most common - English"
+    input: "Top 10 defect symptoms FAC01 January 2026"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 1
+
+  - id: defect_symptom_by_time_range
+    title: "Bug Fix #8: Defect symptom with explicit time range"
+    input: "Phân tích loại lỗi từ tháng 10/2025 đến 12/2025"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - decision.filters.from
+        - decision.filters.to
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 0
+
+  - id: defect_symptom_pareto
+    title: "Bug Fix #8: Defect Pareto analysis"
+    input: "Pareto lỗi FAC01 tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 0
+
+  - id: defect_symptom_worst_errors
+    title: "Bug Fix #8: Worst errors query"
+    input: "Top 10 worst defects in production in January 2026"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.limit: 10
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 0
+
+  # ============================================================
+  # Bug Fix #9: Defect queries - dimension vs symptom grouping
+  # ============================================================
+  - id: defect_symptom_by_line_ignore
+    title: "Bug Fix #9: 'lỗi theo line' should group by line (not symptom)"
+    input: "lỗi nào nhiều nhất theo line tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "line"
+      # When "theo line" is specified, group by line not symptom
+      not_contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 1
+
+  - id: defect_symptom_by_line_simple
+    title: "Bug Fix #9: Defect count by line (not symptom breakdown)"
+    input: "Thống kê lỗi theo line FAC01 tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "line"
+      # Should NOT have symptom when "theo line" is specified
+      not_contains_values:
+        decision.group_by:
+          - "symptom"
+      min_rows: 0
+
+  - id: defect_symptom_with_shift
+    title: "Bug Fix #9: Symptom query ignores shift dimension"
+    input: "loại lỗi nào nhiều nhất theo ca tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      # Should NOT have "shift" in group_by
+      not_contains_values:
+        decision.group_by:
+          - "shift"
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - CURRENT_PERIOD
+  # ============================================================
+  - id: time_pattern_hom_nay
+    title: "CURRENT_PERIOD: Hôm nay / today"
+    input: "thống kê sản lượng hôm nay"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_tuan_nay
+    title: "CURRENT_PERIOD: Tuần này / this week"
+    input: "báo cáo lỗi tuần này"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_thang_nay
+    title: "CURRENT_PERIOD: Tháng này / this month"
+    input: "thống kê tháng này theo line"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "line"
+      min_rows: 0
+
+  - id: time_pattern_quy_nay
+    title: "CURRENT_PERIOD: Quý này / this quarter"
+    input: "sản lượng quý này"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_nam_nay
+    title: "CURRENT_PERIOD: Năm nay / this year"
+    input: "thống kê sản lượng năm nay theo tháng"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "month"
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - PREVIOUS_PERIOD
+  # ============================================================
+  - id: time_pattern_hom_qua
+    title: "PREVIOUS_PERIOD: Hôm qua / yesterday"
+    input: "sản lượng hôm qua"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_tuan_truoc
+    title: "PREVIOUS_PERIOD: Tuần trước / last week"
+    input: "thống kê lỗi tuần trước"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_thang_truoc
+    title: "PREVIOUS_PERIOD: Tháng trước / last month"
+    input: "báo cáo tháng trước theo line"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "line"
+      min_rows: 0
+
+  - id: time_pattern_quy_truoc
+    title: "PREVIOUS_PERIOD: Quý trước / last quarter"
+    input: "sản lượng quý trước"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_nam_truoc
+    title: "PREVIOUS_PERIOD: Năm trước / last year"
+    input: "thống kê năm trước theo tháng"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "month"
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - TO_DATE (MTD, QTD, YTD)
+  # ============================================================
+  - id: time_pattern_mtd_vn
+    title: "TO_DATE: MTD - Từ đầu tháng đến nay"
+    input: "thống kê sản lượng từ đầu tháng đến nay"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_mtd_en
+    title: "TO_DATE: MTD (English shortcut)"
+    input: "productivity MTD"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_qtd_vn
+    title: "TO_DATE: QTD - Từ đầu quý đến nay"
+    input: "báo cáo lỗi từ đầu quý đến nay"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_qtd_en
+    title: "TO_DATE: QTD (English shortcut)"
+    input: "defect count QTD by line"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "line"
+      min_rows: 0
+
+  - id: time_pattern_ytd_vn
+    title: "TO_DATE: YTD - Từ đầu năm đến nay"
+    input: "thống kê sản lượng từ đầu năm đến nay theo tháng"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "month"
+      min_rows: 0
+
+  - id: time_pattern_ytd_en
+    title: "TO_DATE: YTD (English shortcut)"
+    input: "total production YTD"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - YEAR_RANGE
+  # ============================================================
+  - id: time_pattern_year_range_vn
+    title: "YEAR_RANGE: Từ năm X đến năm Y"
+    input: "thống kê sản lượng từ năm 2024 đến năm 2026 theo năm"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      contains_values:
+        decision.group_by:
+          - "year"
+      min_rows: 0
+
+  - id: time_pattern_year_range_en
+    title: "YEAR_RANGE: From year X to year Y (English)"
+    input: "productivity from year 2023 to 2025"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - NOW, BEFORE, AFTER
+  # ============================================================
+  - id: time_pattern_hien_tai
+    title: "NOW: Hiện tại / bây giờ / now"
+    input: "sản lượng hiện tại"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_before_date
+    title: "BEFORE: Trước ngày X"
+    input: "thống kê lỗi trước ngày 2026-01-10"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  - id: time_pattern_after_date
+    title: "AFTER: Sau ngày X"
+    input: "sản lượng sau ngày 2026-01-01"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.filters.from
+        - decision.filters.to
+      min_rows: 0
+
+  # ============================================================
+  # NEW TIME PATTERNS - HOUR_RANGE
+  # ============================================================
+  - id: time_pattern_hour_range_vn
+    title: "HOUR_RANGE: Từ Xh đến Yh"
+    input: "thống kê sản lượng từ 8h đến 17h hôm nay"
+    context:
+      factoryCode: FAC01
+      locale: vi
+      debug: true
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - debug.semantic.params.hour_range.from
+        - debug.semantic.params.hour_range.to
+        - decision.filters.from
+      min_rows: 0
+
+  - id: time_pattern_hour_range_en
+    title: "HOUR_RANGE: From X:00 to Y:00"
+    input: "productivity from 8:00 to 17:00 today"
+    context:
+      factoryCode: FAC01
+      locale: en
+      debug: true
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - debug.semantic.params.hour_range.from
+        - debug.semantic.params.hour_range.to
+      min_rows: 0
+
+  - id: defect_symptom_most_per_line
+    title: "Bug Fix #10: Defect symptom 'lỗi nhiều nhất'"
+    input: "thống kê lỗi nhiều nhất trong 1 tháng qua"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - planner_result.data
+        - decision.entity
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - symptom
+      min_rows: 1
+
+  - id: defect_count_by_month
+    title: "Bug Fix #11: Defect count by month (not symptom breakdown)"
+    input: "thống kê lỗi theo tháng FAC01"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "month"
+      # Should NOT have symptom when user explicitly asks for "theo tháng"
+      not_contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - month
+      min_rows: 0
+
+  - id: defect_chi_tiet_loi
+    title: "Bug Fix #11: 'Chi tiết lỗi' should group by symptom"
+    input: "Chi tiết lỗi FAC01 tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - symptom
+      min_rows: 0
+
+  - id: defect_hang_muc_loi
+    title: "Bug Fix #11: 'Hạng mục lỗi' should group by symptom"
+    input: "Hạng mục lỗi nhiều nhất FAC01"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - symptom
+      min_rows: 0
+
+  - id: defect_items_en
+    title: "Bug Fix #11: 'Defect items' should group by symptom"
+    input: "Show me defect items for January 2026"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - symptom
+      min_rows: 0
+
+  - id: defect_breakdown_analysis
+    title: "Bug Fix #11: 'Defect breakdown' should group by symptom"
+    input: "Defect breakdown analysis for FAC01"
+    context:
+      factoryCode: FAC01
+      locale: en
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+        decision.viz: "table"
+      contains_values:
+        decision.group_by:
+          - "symptom"
+      required_columns:
+        - symptom
+      min_rows: 0
+
+  # ============================================================
+  # Bug Fix #12: Defect queries - "từng/mỗi/each" pattern support
+  # ============================================================
+  - id: defect_by_each_month
+    title: "Bug Fix #12: 'theo từng tháng' should group by month (not symptom)"
+    input: "thống kê chi tiết lỗi 3 tháng gần nhất theo từng tháng"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "month"
+      required_columns:
+        - month
+      min_rows: 0
+
+  - id: defect_by_each_line
+    title: "Bug Fix #12: 'theo từng line' should group by line"
+    input: "thống kê lỗi theo từng line tháng 1/2026"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "line"
+      # NOTE: Defect API doesn't return line info directly.
+      # Future enhancement: join with PO API to enrich line data.
+      # For now, we just validate that group_by intent is correct.
+      min_rows: 0
+
+  - id: defect_by_each_shift
+    title: "Bug Fix #12: 'theo mỗi ca' should group by shift"
+    input: "báo cáo lỗi theo mỗi ca tuần này"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.group_by
+        - planner_result.data
+      json_equals:
+        decision.entity: "defect"
+      contains_values:
+        decision.group_by:
+          - "shift"
+      min_rows: 0
+
+  - id: production_cross_year_range_no_prefix
+    title: "Bug Fix #13: Cross-year month range without 'từ' prefix"
+    input: "sản lượng thực tế tháng 10/2025 đến 01/2026 theo tháng và line"
+    context:
+      factoryCode: FAC01
+      locale: vi
+    expect:
+      status_code: 200
+      json_paths_exist:
+        - decision.entity
+        - decision.filters.from
+        - decision.filters.to
+        - decision.group_by
+      json_equals:
+        decision.entity: "production"
+        decision.filters.from: "2025-10-01"
+        decision.filters.to: "2026-01-31"
+      contains_values:
+        decision.group_by:
+          - "month"
+          - "line"
+      min_rows: 0

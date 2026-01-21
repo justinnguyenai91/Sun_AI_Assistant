@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "D:\AI_Project\Sun\Backend\tests\run_chat_tests.py", line 240, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "D:\AI_Project\Sun\Backend\tests\run_chat_tests.py", line 120, in main
+    meta = doc.get("meta") or {}
+           ^^^^^^^
+AttributeError: 'str' object has no attribute 'get'

@@ -1,6 +1,10 @@
 # Local/editor
 .vscode/
 
+# Environment files (keep .env.example only)
+.env
+!.env.example
+
 # Python
 __pycache__/
 *.pyc

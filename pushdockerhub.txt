@@ -1,0 +1,16 @@
+@echo off
+set DOCKER_HUB_USER=dthausdockerhub
+set DOCKER_HUB_PASS=DThaus1@#$
+set REPOS_NAME=aichatbox
+set DOCKER_HUB=dthausdockerhub
+
+call gradlew build -x test
+docker build -f Dockerfile.local -t %REPOS_NAME% .
+docker images
+docker login --username %DOCKER_HUB_USER% --password %DOCKER_HUB_PASS%
+docker tag %REPOS_NAME%:latest %DOCKER_HUB%/%REPOS_NAME%:latest
+docker push %DOCKER_HUB%/%REPOS_NAME%:latest
+
+echo.
+echo Press any key to exit...
+pause >nul

@@ -4,8 +4,8 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(20px);
+  background: rgba(15, 23, 42, 0.98);
+  /* backdrop-filter removed to prevent flickering */
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding: 16px 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -24,16 +24,7 @@
   display: flex;
   align-items: center;
   filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 4px 8px rgba(99, 102, 241, 0.5));
-  }
+  /* Removed animation to prevent flickering */
 }
 
 .app-title {
@@ -61,18 +52,7 @@
   height: 8px;
   background: #10B981;
   border-radius: 50%;
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.2);
-  }
+  /* Removed animation to prevent flickering on slow connections */
 }
 
 .status-text {

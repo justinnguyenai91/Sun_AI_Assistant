@@ -395,15 +395,16 @@ class SemanticResolver:
         # - "từ tháng 10/2025 đến 1/2026"
         # - "tu thang 10/2025 den thang 1/2026"
         # - "từ 10/2025 đến 01/2026"
+        # - "tháng 10/2025 đến 01/2026" (no "từ" prefix)
         if time_range is None:
             m_my = re.search(
-                r"(from|từ|tu)\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})\s*(to|đến|den)\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})",
+                r"(?:from|từ|tu)?\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})\s*(?:to|đến|den)\s*(?:tháng|thang)?\s*(\d{1,2})\s*/\s*(\d{4})",
                 raw,
                 re.IGNORECASE,
             )
             if m_my:
-                m1, y1 = int(m_my.group(2)), int(m_my.group(3))
-                m2, y2 = int(m_my.group(5)), int(m_my.group(6))
+                m1, y1 = int(m_my.group(1)), int(m_my.group(2))
+                m2, y2 = int(m_my.group(3)), int(m_my.group(4))
                 m1 = max(1, min(12, m1))
                 m2 = max(1, min(12, m2))
                 if (y2, m2) < (y1, m1):

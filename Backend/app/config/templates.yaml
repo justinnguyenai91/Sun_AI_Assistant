@@ -20,7 +20,7 @@ templates:
         expr: countDistinct(prodStatus.code)
       - name: processType
         expr: countDistinct(process.code)
-    viz: bar
+    viz: table
 
   - id: prod.stat.line.model
     entity: production
@@ -39,7 +39,7 @@ templates:
         expr: sum(defectQty)
       - name: avgTactTime
         expr: avg(tactTime)
-    viz: bar
+    viz: table
 
   - id: prod.stat.model
     entity: production
@@ -58,7 +58,7 @@ templates:
         expr: sum(defectQty)
       - name: avgTactTime
         expr: avg(tactTime)
-    viz: bar
+    viz: table
 
   - id: prod.stat.month.line
     entity: production
@@ -77,7 +77,7 @@ templates:
         expr: sum(defectQty)
       - name: avgTactTime
         expr: avg(tactTime)
-    viz: bar
+    viz: table
 
   - id: prod.stat.month.line.status
     entity: production
@@ -98,7 +98,7 @@ templates:
         expr: avg(tactTime)
       - name: orderCount
         expr: count(*)
-    viz: bar
+    viz: table
 
   - id: prod.query.raw
     entity: production
@@ -671,7 +671,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: line
     provides: [plan_qty, actual_production_qty, plan_attainment_percent]
-    viz: bar
+    viz: table
 
   # Achievement rate by month
   - id: prod.achievement.month
@@ -683,7 +683,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: month
     provides: [plan_qty, actual_production_qty, plan_attainment_percent]
-    viz: line
+    viz: table
 
   # Achievement rate by line and month (trend)
   - id: prod.achievement.month.line
@@ -695,7 +695,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: [month, line]
     provides: [plan_qty, actual_production_qty, plan_attainment_percent]
-    viz: line
+    viz: table
 
   # Defect rate by line
   - id: quality.defect_rate.line
@@ -707,7 +707,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: line
     provides: [actual_production_qty, defect_count, defect_percent]
-    viz: bar
+    viz: table
 
   # Defect rate by model
   - id: quality.defect_rate.model
@@ -719,7 +719,7 @@ templates:
     params: [from, to, factoryPk, modelId]
     group_by: model
     provides: [actual_production_qty, defect_count, defect_percent]
-    viz: bar
+    viz: table
 
   # OEE by line
   - id: prod.oee.line
@@ -731,7 +731,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: line
     provides: [plan_qty, actual_production_qty, defect_count, oee]
-    viz: bar
+    viz: table
 
   # Yield rate by line
   - id: prod.yield.line
@@ -743,7 +743,7 @@ templates:
     params: [from, to, factoryPk, linePks]
     group_by: line
     provides: [actual_production_qty, defect_count, good_qty, yield_rate]
-    viz: bar
+    viz: table
 
   # Top/Bottom performers (achievement rate)
   - id: prod.achievement.pareto
@@ -759,7 +759,7 @@ templates:
       field: plan_attainment_percent
       direction: desc
     limit: 10
-    viz: bar
+    viz: table
 
   # Production by process type
   - id: prod.stat.process
@@ -811,7 +811,7 @@ templates:
       field: defect_count
       direction: desc
     limit: 10
-    viz: bar
+    viz: table
 
   # Model comparison
   - id: prod.compare.models
