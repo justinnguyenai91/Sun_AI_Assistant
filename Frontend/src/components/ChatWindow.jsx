@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble.jsx";
 import Loader from "./Loader.jsx";
 
-export default function ChatWindow({ messages, isLoading, locale }) {
+export default function ChatWindow({ messages, isLoading, locale, onDeleteMessage }) {
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -13,7 +13,11 @@ export default function ChatWindow({ messages, isLoading, locale }) {
   return (
     <div className="chat-window">
       {messages.map((msg, idx) => (
-        <MessageBubble key={idx} message={{ ...msg, locale: msg?.locale || locale }} />
+        <MessageBubble
+          key={idx}
+          message={{ ...msg, locale: msg?.locale || locale }}
+          onDelete={typeof onDeleteMessage === "function" ? () => onDeleteMessage(idx) : undefined}
+        />
       ))}
       {isLoading && <Loader />}
       <div ref={chatEndRef} />

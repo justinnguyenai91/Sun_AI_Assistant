@@ -1,0 +1,67 @@
+/* Frontend/src/components/PromptChips.css */
+.prompt-chips-container {
+  padding: 12px 0;
+  max-width: 100%;
+}
+
+.prompt-chips-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(203, 213, 225, 0.7);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prompt-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .prompt-chips-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.prompt-chip {
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: rgba(203, 213, 225, 0.95);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.prompt-chip:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.prompt-chip:active {
+  transform: translateY(0);
+}
+
+.prompt-chip-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.prompt-chip-text {
+  flex: 1;
+  line-height: 1.4;
+}

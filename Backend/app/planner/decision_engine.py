@@ -93,9 +93,74 @@ class DecisionEngine:
         qb = QueryBuilder()
         plan = qb.build(plan)
 
+        # ============================================================
+        # OVERRIDE: Defect queries with dimensional grouping
+        # ============================================================
+        # When user queries defect BY line/model/process, use production order
+        # endpoint instead of defect endpoint, because:
+        # 1. PO API has line/model/process info
+        # 2. PO API has totalDefectQty aggregated
+        # 3. Defect API doesn't have dimensional info
+        if plan.get("entity") == "defect" and plan.get("adapter") == "mes":
+            group_by_list = plan.get("group_by")
+            if isinstance(group_by_list, list):
+                # Check if grouping includes dimensional attributes (not just time/symptom)
+                dimensional_attrs = {"line", "model", "process", "processType"}
+                has_dimensional_grouping = any(g in dimensional_attrs for g in group_by_list)
+                
+                if has_dimensional_grouping:
+                    # Override to use production order endpoint
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Defect query with dimensional grouping {group_by_list} → switching to PO endpoint")
+                    
+                    plan["endpoint"] = "/productionOrder/search"
+                    plan["method"] = "GET"
+                    
+                    # Update measure to use defectQty field from PO API
+                    if "measure" in plan:
+                        plan["measure"]["field"] = ["defectQty", "totalDefectQty", "defect_qty", "ngQty", "ng_qty"]
+                    
+                    # Update dimension_fields to include PO dimensional fields
+                    dim_fields = plan.get("dimension_fields") or {}
+                    if "line" in group_by_list:
+                        dim_fields["line"] = [
+                            "line.code", "line.name",
+                            "lineCode", "lineName",
+                            "line_code", "line_name"
+                        ]
+                    if "model" in group_by_list:
+                        dim_fields["model"] = [
+                            "model.code", "model.name",
+                            "modelCode", "modelName",
+                            "model_code", "model_name"
+                        ]
+                    if "process" in group_by_list or "processType" in group_by_list:
+                        dim_fields["process"] = [
+                            "process.code", "process.name",
+                            "processTypeCode", "processTypeName",
+                            "process_code", "process_name"
+                        ]
+                    plan["dimension_fields"] = dim_fields
+                    
+                    # Update query_params mapping (PO uses factoryPk singular, not plural)
+                    plan["query_params"] = {
+                        "from": "from",
+                        "to": "to",
+                        "factoryPks": "factoryPk",
+                        "linePks": "linePks",
+                        "modelId": "modelId",
+                        "prodStatus": "prodStatus",
+                        "processType": "processType",
+                        "poType": "poType"
+                    }
+
         # Provide a reasonable default viz if template didn't set it
         if not plan.get("viz"):
             # tables for raw queries, bar for aggregations
-            plan["viz"] = "table" if plan.get("group_by") in (None, "", []) else "bar"
+            # Exception: defect symptom queries should use table, not chart
+            group_by = plan.get("group_by")
+            is_symptom_only = isinstance(group_by, list) and "symptom" in group_by
+            plan["viz"] = "table" if (plan.get("group_by") in (None, "", []) or is_symptom_only) else "bar"
 
         return plan

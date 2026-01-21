@@ -7,9 +7,11 @@ httpx==0.27.*
 python-dotenv==1.0.*
 pyyaml==6.*
 pandas
-sqlalchemy
+sqlalchemy==2.*
 psycopg2-binary
 asyncpg
+alembic==1.13.*
+redis==5.*
 
 # Dependencies needed by gateway app
 lark-parser

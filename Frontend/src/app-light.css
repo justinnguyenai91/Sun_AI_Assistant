@@ -1,0 +1,401 @@
+/* app-light.css - Pure White/Black Theme */
+
+/* ============================================
+   LIGHT MODE - Pure White Background
+   ============================================ */
+
+/* Root & Container */
+.app-root[data-theme="light"] {
+  background: #ffffff;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .app-main {
+  background: #ffffff;
+}
+
+.app-root[data-theme="light"] .chat-shell {
+  background: #ffffff;
+}
+
+/* VoiceInput Button (base styling lives in components/VoiceInput.css) */
+.app-root[data-theme="light"] .voice-input-btn.listening {
+  background: #ef4444;
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #ffffff;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
+.app-root[data-theme="light"] .conversation-history {
+  background: #f5f5f5;
+  border-right: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .history-header {
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .history-header h3 {
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .toggle-sidebar {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .toggle-sidebar:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+.app-root[data-theme="light"] .new-chat-btn {
+  background: #e0e0e0;
+  color: #000000;
+  border: 1px solid #c0c0c0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .new-chat-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .theme-toggle-btn {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .theme-toggle-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+/* ============================================
+   QUICK FILTERS
+   ============================================ */
+.app-root[data-theme="light"] .quick-filters {
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .quick-filters-title {
+  color: #666666;
+}
+
+.app-root[data-theme="light"] .quick-filter-btn {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+  backdrop-filter: none;
+}
+
+.app-root[data-theme="light"] .quick-filter-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .filter-icon {
+  color: #000000;
+}
+
+/* ============================================
+   SESSION ITEMS
+   ============================================ */
+.app-root[data-theme="light"] .session-item {
+  background: #f5f5f5;
+  border: 1px solid #d0d0d0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .session-item:hover {
+  background: #e8e8e8;
+  border-color: #c0c0c0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .session-item.active {
+  background: #e0e0e0;
+  border-color: #a0a0a0;
+}
+
+.app-root[data-theme="light"] .session-title {
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .session-meta {
+  color: #666666;
+}
+
+.app-root[data-theme="light"] .session-delete {
+  border-color: #0b0b0b;
+  color: #040404;
+}
+
+.app-root[data-theme="light"] .session-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #dc2626;
+  color: #b91c1c;
+}
+
+/* ============================================
+   HEADER & FOOTER
+   ============================================ */
+.app-root[data-theme="light"] .app-header {
+  background: #f5f5f5;
+  border-bottom: 1px solid #d0d0d0;
+  backdrop-filter: none;
+}
+
+.app-root[data-theme="light"] .app-title {
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .header-status {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.app-root[data-theme="light"] .status-text {
+  color: #059669;
+}
+
+.app-root[data-theme="light"] .app-footer {
+  background: #f5f5f5;
+  border-top: 1px solid #d0d0d0;
+  color: #666666;
+  backdrop-filter: none;
+}
+
+/* ============================================
+   MESSAGE BUBBLES
+   ============================================ */
+.app-root[data-theme="light"] .message-bubble.user {
+  background: #e0e0e0;
+  color: #000000;
+  border: 1px solid #c0c0c0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .message-bubble.ai,
+.app-root[data-theme="light"] .message-bubble.assistant {
+  background: #f5f5f5;
+  color: #000000;
+  border: 1px solid #d0d0d0;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .message-bubble:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   PROMPT CHIPS
+   ============================================ */
+.app-root[data-theme="light"] .prompt-chips-label {
+  color: #666666;
+}
+
+.app-root[data-theme="light"] .prompt-chip {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+  backdrop-filter: none;
+}
+
+.app-root[data-theme="light"] .prompt-chip:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+  box-shadow: none;
+}
+
+/* ============================================
+   INPUT AREA
+   ============================================ */
+.app-root[data-theme="light"] .chat-input-container {
+  background: #f5f5f5;
+  border-top: 1px solid #d0d0d0;
+  backdrop-filter: none;
+}
+
+.app-root[data-theme="light"] .chat-input {
+  background: #ffffff;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .chat-input:focus {
+  border-color: #999999;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.app-root[data-theme="light"] .chat-input::placeholder {
+  color: #999999;
+}
+
+.app-root[data-theme="light"] .send-btn {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .send-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+  box-shadow: none;
+}
+
+.app-root[data-theme="light"] .send-btn:disabled {
+  background: #f0f0f0;
+  color: #999999;
+  border-color: #d0d0d0;
+}
+
+/* ============================================
+   VOICE BUTTON
+   ============================================ */
+.app-root[data-theme="light"] .voice-input-btn {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .voice-input-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+.app-root[data-theme="light"] .voice-input-btn.listening {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+/* ============================================
+   LOADING SPINNER
+   ============================================ */
+.app-root[data-theme="light"] .loading-spinner {
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .loading-text {
+  color: #666666;
+}
+
+/* ============================================
+   TABLES
+   ============================================ */
+.app-root[data-theme="light"] .result-table,
+.app-root[data-theme="light"] .message-table {
+  background: #f5f5f5;
+  border: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .result-table th {
+  background: #e0e0e0;
+  color: #000000;
+  border-bottom: 2px solid #c0c0c0;
+}
+
+.app-root[data-theme="light"] .result-table td {
+  color: #000000;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .result-table tr:hover {
+  background: #e8e8e8;
+}
+
+/* ============================================
+   COLLAPSIBLE TABLE
+   ============================================ */
+.app-root[data-theme="light"] .collapsible-table {
+  background: #f5f5f5;
+  border: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .collapsible-header {
+  background: #e0e0e0;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.app-root[data-theme="light"] .expand-btn {
+  background: #e0e0e0;
+  color: #000000;
+  border: 1px solid #c0c0c0;
+}
+
+.app-root[data-theme="light"] .expand-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+/* ============================================
+   EXPORT BUTTON
+   ============================================ */
+.app-root[data-theme="light"] .export-button {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .export-button:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+/* ============================================
+   MOBILE
+   ============================================ */
+.app-root[data-theme="light"] .mobile-menu-btn {
+  background: #e0e0e0;
+  border: 1px solid #c0c0c0;
+  color: #000000;
+}
+
+.app-root[data-theme="light"] .mobile-menu-btn:hover {
+  background: #d0d0d0;
+  border-color: #b0b0b0;
+}
+
+/* ============================================
+   SCROLLBAR
+   ============================================ */
+.app-root[data-theme="light"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app-root[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.app-root[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+.app-root[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #b0b0b0;
+}
+
+/* ============================================
+   CHARTS (Recharts)
+   ============================================ */
+.app-root[data-theme="light"] .recharts-text {
+  fill: #000000 !important;
+}
+
+.app-root[data-theme="light"] .recharts-cartesian-axis-tick text {
+  fill: #666666 !important;
+}
+
+.app-root[data-theme="light"] .recharts-label {
+  fill: #000000 !important;
+}

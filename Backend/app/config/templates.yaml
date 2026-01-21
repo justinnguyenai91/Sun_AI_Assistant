@@ -547,6 +547,27 @@ templates:
         - occurDate
         - createdAt
         - date
+      line:
+        - lineCode
+        - line_code
+        - line.code
+        - line.name
+        - lineName
+        - line_name
+      model:
+        - modelCode
+        - model_code
+        - model.code
+        - model.name
+        - modelName
+        - model_name
+      process:
+        - processTypeCode
+        - process_code
+        - process.code
+        - process.name
+        - processTypeName
+        - process_name
       symptom:
         - processDefect.defectSymptomDetail.code
         - processDefect.defectSymptomDetail.name
@@ -612,7 +633,7 @@ templates:
       formula: "defect_count"
       variables:
         defect_count: defects.defect_count
-    viz: bar
+    viz: table
 
   # ------------------------------------------------------------
   # NEW: Computed KPI template (defect_ppm per day)
@@ -634,6 +655,174 @@ templates:
       variables:
         actual_production_qty: production.actual_production_qty
         defect_count: defects.defect_count
+    viz: table
+
+  # -----------------------------
+  # Additional Query Patterns for Sales Demo
+  # -----------------------------
+  
+  # Achievement rate by line (computed metric)
+  - id: prod.achievement.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: line
+    provides: [plan_qty, actual_production_qty, plan_attainment_percent]
+    viz: bar
+
+  # Achievement rate by month
+  - id: prod.achievement.month
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: month
+    provides: [plan_qty, actual_production_qty, plan_attainment_percent]
+    viz: line
+
+  # Achievement rate by line and month (trend)
+  - id: prod.achievement.month.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: [month, line]
+    provides: [plan_qty, actual_production_qty, plan_attainment_percent]
+    viz: line
+
+  # Defect rate by line
+  - id: quality.defect_rate.line
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: line
+    provides: [actual_production_qty, defect_count, defect_percent]
+    viz: bar
+
+  # Defect rate by model
+  - id: quality.defect_rate.model
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, modelId]
+    group_by: model
+    provides: [actual_production_qty, defect_count, defect_percent]
+    viz: bar
+
+  # OEE by line
+  - id: prod.oee.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: line
+    provides: [plan_qty, actual_production_qty, defect_count, oee]
+    viz: bar
+
+  # Yield rate by line
+  - id: prod.yield.line
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: line
+    provides: [actual_production_qty, defect_count, good_qty, yield_rate]
+    viz: bar
+
+  # Top/Bottom performers (achievement rate)
+  - id: prod.achievement.pareto
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: line
+    provides: [plan_qty, actual_production_qty, plan_attainment_percent]
+    order_by:
+      field: plan_attainment_percent
+      direction: desc
+    limit: 10
+    viz: bar
+
+  # Production by process type
+  - id: prod.stat.process
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks, processType]
+    group_by: processType
+    provides: [plan_qty, actual_production_qty]
+    viz: pie
+
+  # Daily production trend
+  - id: prod.trend.daily
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: date
+    provides: [plan_qty, actual_production_qty, plan_attainment_percent]
+    viz: line
+
+  # Weekly summary
+  - id: prod.summary.week
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, linePks]
+    group_by: week
+    provides: [plan_qty, actual_production_qty, defect_count, plan_attainment_percent]
+    viz: line
+
+  # Defect analysis by symptom
+  - id: quality.defect.symptom.pareto
+    entity: defect
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /processDefect/search
+    params: [from, to, factoryPk, linePks, symptomIds]
+    group_by: symptom
+    provides: [defect_count, defect_percent]
+    order_by:
+      field: defect_count
+      direction: desc
+    limit: 10
+    viz: bar
+
+  # Model comparison
+  - id: prod.compare.models
+    entity: production
+    action: statistic
+    adapter: mes
+    method: GET
+    endpoint: /productionOrder/search
+    params: [from, to, factoryPk, modelId]
+    group_by: model
+    provides: [plan_qty, actual_production_qty, defect_count, plan_attainment_percent, defect_percent]
     viz: table
 
   - id: kpi.defect_ppm.daily_shift

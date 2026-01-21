@@ -1,7 +1,11 @@
 // Frontend/src/components/MessageBubble.jsx
 import React, { useMemo } from "react";
 import TopLinesChart from "./TopLinesChart.jsx";
+import ExportButton from "./ExportButton.jsx";
+import CollapsibleTable from "./CollapsibleTable.jsx";
 import { DEFAULT_COLUMN_ORDER, getColumnTitle } from "../utils/columnI18n.js";
+import { getMetricColorClass, detectMetricType } from "../utils/tableHelpers.js";
+import { IconTrash } from "./Icons.jsx";
 
 function isRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -214,22 +218,62 @@ function TableMessage({ rows, locale, hiddenColumns, visibleColumns, groupBy }) 
 
   const fmtCell = (col, v) => {
     if (String(col) === "shift") return fmt(formatShiftValue(v));
+    
+    // Check if this is a metric column and apply color coding
+    const metricColumns = [
+      'oee', 'quality', 'performance', 'availability',
+      'totalActualQty', 'totalPlanQty', 'totalDefectQty',
+      'defectRate', 'yield', 'defect_ppm', 'avgTactTime'
+    ];
+    
+    const isMetric = metricColumns.some(m => 
+      String(col).toLowerCase().includes(m.toLowerCase())
+    );
+    
+    if (isMetric && typeof v === 'number') {
+      const metricType = detectMetricType(String(col));
+      const colorClass = getMetricColorClass(v, metricType);
+      const formattedValue = v.toLocaleString();
+      
+      return (
+        <span className={colorClass}>
+          {formattedValue}
+          {String(col).toLowerCase().includes('rate') && '%'}
+        </span>
+      );
+    }
+    
     return fmt(v);
+  };
+
+  const getTableTitle = () => {
+    if (groupBy && Array.isArray(groupBy) && groupBy.length > 0) {
+      const dims = groupBy.join(', ');
+      return locale === 'vi' 
+        ? `Dữ liệu theo ${dims}` 
+        : `Data by ${dims}`;
+    }
+    return locale === 'vi' ? 'Bảng dữ liệu' : 'Data Table';
   };
 
   return (
     <div className="message-table">
       {groupHideWarning && <div className="muted" style={{ marginBottom: 8 }}>{groupHideWarning}</div>}
-      <table className="result-table">
-        <thead>
-          <tr>
-            {columns.map((c) => (
-              <th key={c}>{getColumnTitle(c, locale)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
+      
+      {/* Export buttons */}
+      <ExportButton data={rows} filename="mes_data" locale={locale} />
+      
+      <CollapsibleTable title={getTableTitle()} rows={rows} columns={columns}>
+        <table className="result-table">
+          <thead>
+            <tr>
+              {columns.map((c) => (
+                <th key={c}>{getColumnTitle(c, locale)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => (
             <tr key={idx}>
               {columns.map((c) => (
                 <td key={c}>{fmtCell(c, r?.[c])}</td>
@@ -238,6 +282,7 @@ function TableMessage({ rows, locale, hiddenColumns, visibleColumns, groupBy }) 
           ))}
         </tbody>
       </table>
+      </CollapsibleTable>
     </div>
   );
 }
@@ -290,29 +335,62 @@ function ChartMessage({ rows, decision, locale, chartSpec }) {
   return <div className="muted">{msg}</div>;
 }
 
-export default function MessageBubble({ message }) {
+export default function MessageBubble({ message, onDelete }) {
   const sender = message?.sender || "ai";
   const type = message?.type || "text";
-  const isUser = sender === "user";
+  const senderLc = String(sender || "").toLowerCase();
+  const isUser = senderLc === "user" || senderLc === "human" || senderLc === "me";
   const locale = message?.locale || "en";
 
-  const wide = !isUser && type === "chart";
+  const wide = !isUser && (type === "chart" || type === "table");
 
   return (
     <div className={`message-row ${isUser ? "right" : "left"}`}>
-      <div className={`message-bubble ${isUser ? "user" : "ai"}${wide ? " wide" : ""}`}>
-        {type === "table" ? (
-          <TableMessage
-            rows={message?.rows || []}
-            locale={locale}
-            hiddenColumns={message?.hiddenColumns || []}
-            visibleColumns={message?.visibleColumns || null}
-            groupBy={message?.groupBy || message?.decision?.group_by || null}
-          />
-        ) : type === "chart" ? (
-          <ChartMessage rows={message?.rows || []} decision={message?.decision || {}} locale={locale} chartSpec={message?.chartSpec || null} />
-        ) : (
-          <div className="message-text">{message?.text || ""}</div>
+      {/* Avatar cho AI */}
+      {!isUser && (
+        <div className="message-avatar">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="24" height="24" rx="6" fill="url(#avatar-gradient)"/>
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="white"/>
+            <defs>
+              <linearGradient id="avatar-gradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#6366f1"/>
+                <stop offset="1" stopColor="#8b5cf6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      )}
+      
+      <div className="message-content">
+        <div className={`message-bubble ${isUser ? "user" : "ai"}${wide ? " wide" : ""}`}>
+          {type === "table" ? (
+            <TableMessage
+              rows={message?.rows || []}
+              locale={locale}
+              hiddenColumns={message?.hiddenColumns || []}
+              visibleColumns={message?.visibleColumns || null}
+              groupBy={message?.groupBy || message?.decision?.group_by || null}
+            />
+          ) : type === "chart" ? (
+            <ChartMessage rows={message?.rows || []} decision={message?.decision || {}} locale={locale} chartSpec={message?.chartSpec || null} />
+          ) : (
+            <div className="message-text">{message?.text || message?.content || ""}</div>
+          )}
+        </div>
+
+        {typeof onDelete === "function" && (
+          <div className="message-actions">
+            <button
+              className="message-action-btn"
+              type="button"
+              onClick={onDelete}
+              title={String(locale || "en").toLowerCase().startsWith("vi") ? "Xóa tin nhắn" : "Delete message"}
+              aria-label={String(locale || "en").toLowerCase().startsWith("vi") ? "Xóa tin nhắn" : "Delete message"}
+            >
+              <IconTrash size={16} />
+            </button>
+          </div>
         )}
       </div>
     </div>

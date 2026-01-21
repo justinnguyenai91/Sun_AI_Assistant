@@ -1,0 +1,47 @@
+/* Frontend/src/components/ExportButton.css */
+.export-button-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.export-btn {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--accent-primary);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.export-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.export-btn:active {
+  transform: translateY(0);
+}
+
+.export-btn svg {
+  flex-shrink: 0;
+}
+
+.export-csv:hover {
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.export-json:hover {
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.5);
+}

@@ -1,8 +1,16 @@
 // src/App.jsx
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import "./App.css";
+import "./app-dark.css"; // Dark mode theme
+import "./app-light.css"; // Light mode theme
+import "./components/Header.css"; // Header and footer styles
+import "./styles/saas.css"; // Modern SaaS shell override
 import ChatWindow from "./components/ChatWindow";
 import ChatInput from "./components/ChatInput";
+import ConversationHistory from "./components/ConversationHistory";
+import LoadingSpinner from "./components/LoadingSpinner";
+import VoiceInput from "./components/VoiceInput";
+import PromptChips from "./components/PromptChips";
 import { detectLocaleFromText } from "./utils/columnI18n.js";
 import { t } from "./utils/i18n.js";
 import { aggregateRows } from "./utils/aggregateRows.js";
@@ -17,15 +25,146 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [locale, setLocale] = useState("vi");
+  
+  // Theme state (dark/light)
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("appTheme");
+    return saved || "dark";
+  });
+  
   const [pendingFollowUp, setPendingFollowUp] = useState(null);
   const [lastDataQuery, setLastDataQuery] = useState(null); // { text, locale, factoryCodes }
   const inFlightAbortRef = useRef(null);
+
+  // Mobile menu state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Auto-scroll ref
+  const messagesEndRef = useRef(null);
+
+  // Voice recognition state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  // Prompt chips state
+  const [showPromptChips, setShowPromptChips] = useState(true);
 
   // Factory context memory (e.g., FAC01, DJVN1): remembered for this session
   const [factoryCodes, setFactoryCodes] = useState([]);
   const [pendingFactory, setPendingFactory] = useState(null); // { originalText: string, locale: string }
 
+  // Session management
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    // Try to restore session ID from localStorage
+    const saved = localStorage.getItem("currentSessionId");
+    return saved || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  });
+  
+  const [sessions, setSessions] = useState(() => {
+    // Restore sessions from localStorage
+    const saved = localStorage.getItem("chatSessions");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  });
+
   const MAX_MODEL_RETRIES = 3;
+
+  // Save session state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("currentSessionId", currentSessionId);
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    localStorage.setItem("chatSessions", JSON.stringify(sessions));
+  }, [sessions]);
+
+  // Save session state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("currentSessionId", currentSessionId);
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    localStorage.setItem("chatSessions", JSON.stringify(sessions));
+  }, [sessions]);
+
+  // Save theme to localStorage
+  useEffect(() => {
+    localStorage.setItem("appTheme", theme);
+  }, [theme]);
+  
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages]);
+
+  // Update current session when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setSessions((prev) => {
+        const existing = prev.find((s) => s.id === currentSessionId);
+        if (existing) {
+          return prev.map((s) =>
+            s.id === currentSessionId
+              ? { ...s, messages, timestamp: Date.now(), messageCount: messages.length }
+              : s
+          );
+        } else {
+          return [
+            ...prev,
+            {
+              id: currentSessionId,
+              messages,
+              timestamp: Date.now(),
+              messageCount: messages.length,
+            },
+          ];
+        }
+      });
+    }
+  }, [messages, currentSessionId]);
+
+  const handleNewChat = () => {
+    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setCurrentSessionId(newSessionId);
+    setMessages([]);
+    setFactoryCodes([]);
+    setPendingFactory(null);
+    setLastDataQuery(null);
+  };
+
+  const handleSelectSession = (sessionId) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (session) {
+      setCurrentSessionId(sessionId);
+      setMessages(session.messages || []);
+      // Try to restore factory codes from session messages
+      const factoryCodes = [];
+      session.messages.forEach((msg) => {
+        const codes = detectFactoryCodes(msg.text || msg.content || "");
+        codes.forEach((code) => {
+          if (!factoryCodes.includes(code)) {
+            factoryCodes.push(code);
+          }
+        });
+      });
+      setFactoryCodes(factoryCodes);
+    }
+  };
+
+  const handleDeleteSession = (sessionId) => {
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    if (sessionId === currentSessionId) {
+      handleNewChat();
+    }
+  };
 
   const detectFactoryCodes = (text) => {
     const up = String(text || "").toUpperCase();
@@ -161,10 +300,16 @@ function App() {
       out.push("productionStatusLabel", "productionStatusCode", "productionStatusLabels", "productionStatusCodes");
 
     // Metrics
-    if (has(/kế\s*hoạch|ke\s*hoach|planned|plan\b/i)) out.push("totalPlanQty", "planQty");
-    if (has(/thực\s*tế|thuc\s*te|actual\b/i)) out.push("totalActualQty", "actualQty");
-    if (has(/lỗi|loi|defect\b/i)) out.push("totalDefectQty", "defectQty");
-    if (has(/tact|takt|chu\s*kỳ|chu\s*ky/i)) out.push("avgTactTime", "tactTime");
+    if (has(/kế\s*hoạch|ke\s*hoach|planned|plan\b/i)) out.push("totalPlanQty", "planQty", "plan_qty", "Số lượng kế hoạch");
+    if (has(/thực\s*tế|thuc\s*te|actual\b/i)) out.push("totalActualQty", "actualQty", "actual_production_qty", "Sản lượng thực tế");
+    if (has(/lỗi|loi|defect\b/i)) out.push("totalDefectQty", "defectQty", "defect_count", "Số lượng lỗi");
+    if (has(/tact|takt|chu\s*kỳ|chu\s*ky/i)) out.push("avgTactTime", "tactTime", "Tact trung bình");
+    
+    // OEE and related KPIs
+    if (has(/\boee\b/i)) out.push("oee", "OEE", "OEE %", "oee_percent");
+    if (has(/chất\s*lượng|chat\s*luong|quality/i)) out.push("quality", "quality_rate", "Chất lượng %");
+    if (has(/hiệu\s*suất|hieu\s*suat|performance|efficiency/i)) out.push("performance", "performance_rate", "efficiency", "Hiệu suất %");
+    if (has(/tỷ\s*lệ\s*đạt|ty\s*le\s*dat|achievement|yield/i)) out.push("yield", "yieldRate", "Tỷ lệ đạt");
 
     return Array.from(new Set(out));
   };
@@ -679,6 +824,16 @@ function App() {
     if (has(/công\s*đoạn|cong\s*doan|process\s*type|process\b/i) && !has(/mã\s*công\s*đoạn|ma\s*cong\s*doan|process\s*code/i)) {
       cols.push("processTypeLabel", "processTypeLabels");
     }
+    
+    // OEE and KPIs
+    if (has(/\boee\b/i)) cols.push("oee", "OEE", "OEE %", "oee_percent");
+    if (has(/chất\s*lượng|chat\s*luong|quality/i)) cols.push("quality", "quality_rate", "Chất lượng %");
+    if (has(/hiệu\s*suất|hieu\s*suat|performance|efficiency/i)) cols.push("performance", "performance_rate", "efficiency", "Hiệu suất %");
+    if (has(/tỷ\s*lệ\s*đạt|ty\s*le\s*dat|achievement|yield/i)) cols.push("yield", "yieldRate", "Tỷ lệ đạt");
+    if (has(/kế\s*hoạch|ke\s*hoach|planned|plan\b/i)) cols.push("totalPlanQty", "planQty", "plan_qty", "Số lượng kế hoạch");
+    if (has(/thực\s*tế|thuc\s*te|actual\b/i)) cols.push("totalActualQty", "actualQty", "actual_production_qty", "Sản lượng thực tế");
+    if (has(/lỗi|loi|defect\b/i)) cols.push("totalDefectQty", "defectQty", "defect_count", "Số lượng lỗi", "Lỗi %");
+    if (has(/tact|takt|chu\s*kỳ|chu\s*ky/i)) cols.push("avgTactTime", "tactTime", "Tact trung bình");
 
     // If we can't map, do nothing (avoid accidental hiding)
     if (cols.length === 0) return null;
@@ -1206,31 +1361,90 @@ function App() {
   };
 
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <div className="header-inner">
-          <span className="logo-emoji">🤖</span>
-          <span className="app-title">DTHAUS AI Assistant</span>
+    <div className="app-root" data-theme={theme}>
+      <div className="app-layout">
+        <ConversationHistory
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          onNewChat={handleNewChat}
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
+          locale={locale}
+          theme={theme}
+          onThemeToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onQuickFilter={(query) => sendMessage(query)}
+          isMobileOpen={isMobileMenuOpen}
+          onCloseMobile={() => setIsMobileMenuOpen(false)}
+        />
+
+        <div className="app-content">
+          <header className="app-header">
+            <div className="header-inner">
+          <div className="header-logo">
+            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <defs>
+                <linearGradient id="logo-gradient" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#3B82F6"/>
+                  <stop offset="50%" stopColor="#6366F1"/>
+                  <stop offset="100%" stopColor="#8B5CF6"/>
+                </linearGradient>
+              </defs>
+              <rect x="3" y="6" width="42" height="32" rx="12" fill="url(#logo-gradient)"/>
+              <path d="M18 40l7-6h8" stroke="url(#logo-gradient)" strokeWidth="0"/>
+              <path d="M16 20h16" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
+              <path d="M16 26h12" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.9"/>
+              <path d="M20 38l6-5h12a7 7 0 0 0 7-7V18a12 12 0 0 0-12-12H15A12 12 0 0 0 3 18v8a7 7 0 0 0 7 7h4l6 5z" fill="none" stroke="white" strokeWidth="2" opacity="0.9"/>
+            </svg>
+          </div>
+          <span className="app-title">AI Manufacturing Assistant</span>
+          <div className="header-status">
+            <span className="status-dot"></span>
+            <span className="status-text">Connected to MES</span>
+          </div>
+            </div>
+          </header>
+
+          <main className="app-main">
+            <section className="chat-shell">
+              {/* Quick queries - always visible */}
+              <PromptChips 
+                onSelect={(query) => sendMessage(query)} 
+                locale={locale}
+                visible={showPromptChips && messages.length === 0}
+              />
+              
+              <ChatWindow
+                messages={messages}
+                isLoading={loading}
+                locale={locale}
+                onDeleteMessage={(index) => {
+                  setMessages((prev) => prev.filter((_, i) => i !== index));
+                }}
+              />
+              
+              {/* Loading spinner */}
+              {loading && <LoadingSpinner locale={locale} />}
+              
+              {/* Auto-scroll anchor */}
+              <div ref={messagesEndRef} style={{ height: '1px' }} />
+              
+              <ChatInput onSend={sendMessage} isLoading={loading} onCancel={() => {
+                try {
+                  inFlightAbortRef.current?.abort?.();
+                } catch {
+                  // ignore
+                }
+                inFlightAbortRef.current = null;
+                setLoading(false);
+                setMessages((prev) => [
+                  ...prev,
+                  { sender: "ai", type: "text", locale, text: t("ui.requestCancelled", locale) },
+                ]);
+              }} locale={locale} />
+            </section>
+          </main>
         </div>
-      </header>
-      <main className="app-main">
-        <section className="chat-shell">
-          <ChatWindow messages={messages} isLoading={loading} locale={locale} />
-          <ChatInput onSend={sendMessage} isLoading={loading} onCancel={() => {
-            try {
-              inFlightAbortRef.current?.abort?.();
-            } catch {
-              // ignore
-            }
-            inFlightAbortRef.current = null;
-            setLoading(false);
-            setMessages((prev) => [
-              ...prev,
-              { sender: "ai", type: "text", locale, text: t("ui.requestCancelled", locale) },
-            ]);
-          }} locale={locale} />
-        </section>
-      </main>
+      </div>
     </div>
   );
 }

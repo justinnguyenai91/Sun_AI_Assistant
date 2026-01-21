@@ -3,6 +3,7 @@ import re
 import logging
 import httpx
 import unicodedata
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException,Request
 from slowapi.middleware import SlowAPIMiddleware
@@ -17,6 +18,8 @@ from app.planner.planner import Planner as PlannerClass
 from app.planner.semantic_resolver import SemanticResolver
 from app.planner.decision_engine import DecisionEngine
 from app.adapters.mes_api_adapter import ApiDataAdapter
+from app.planner.context_manager import context_manager
+from app.planner.metrics_insights import insights_generator
 # from data_engine.engine import DataEngine
 # from decision.decision_schema import Decision
 # chọn adapter
@@ -25,9 +28,53 @@ from app.adapters import llama_client, ollama_client
 from app.intent.intent_pipeline import intent_parser
 
 logger = logging.getLogger(__name__)
+
+
+# Lifespan context manager for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Starting up Sun Gateway...")
+    
+    # Initialize database
+    try:
+        from app.models.database import init_db
+        await init_db()
+    except Exception as e:
+        logger.warning(f"Database initialization failed: {e}")
+    
+    # Initialize cache
+    try:
+        from app.cache.redis_cache import init_cache
+        await init_cache()
+    except Exception as e:
+        logger.warning(f"Cache initialization failed: {e}")
+    
+    logger.info("Sun Gateway ready")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Sun Gateway...")
+    
+    try:
+        from app.cache.redis_cache import cleanup_cache
+        await cleanup_cache()
+    except Exception as e:
+        logger.warning(f"Cache cleanup failed: {e}")
+    
+    try:
+        from app.models.database import cleanup_db
+        await cleanup_db()
+    except Exception as e:
+        logger.warning(f"Database cleanup failed: {e}")
+    
+    logger.info("Sun Gateway stopped")
+
+
 # instantiate runtime planner with components (mock adapter for API-first testing)
 planner = PlannerClass(SemanticResolver(), DecisionEngine(), ApiDataAdapter())
-app = FastAPI(title="Sun Gateway", version="0.1")
+app = FastAPI(title="Sun Gateway", version="0.1", lifespan=lifespan)
 attach_cors(app)
 app.add_middleware(RequestIDMiddleware)
 app.state.limiter = limiter
@@ -147,6 +194,12 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
             # UI table commands: hide/remove/show columns, sorting, etc.
             if _parse_ui_command(text) is not None:
                 return False
+            
+            # Vietnamese follow-up patterns (thế còn, còn...thì sao, tháng X)
+            followup_patt = r"(thế\s*còn|the\s*con|còn\s.*\s*thì\s*sao|con\s.*\s*thi\s*sao|còn\s.*\s*thế\s*nào|con\s.*\s*the\s*nao|còn\s+tháng|con\s+thang|tháng\s+\d{1,2}(?:\s*/\s*\d{4})?|thang\s+\d{1,2}(?:\s*/\s*\d{4})?|năm\s+\d{4}|nam\s+\d{4}|how\s+about|what\s+about)"
+            if re.search(followup_patt, t) or re.search(followup_patt, t_ascii):
+                return True
+            
             # Data-ish keywords (vi/en)
             patt = r"(thống\s*kê|báo\s*cáo|report|statistic|statistics|stats|analytics|query|truy\s*vấn|sản\s*lượng|năng\s*suất|productivity|production|output|defect|lỗi|yield|tact|line|by\s+line|per\s+line|dây\s*chuyền|model|by\s+model|per\s+model|factory|from\s+\d{4}|\d+\s*(tháng|month|năm|year)|(?:tháng|thang)\s*\d{1,2}\s*/\s*\d{4}|tỷ\s*lệ|ti\s*lệ|ty\s*le|đạt\s*kế\s*hoạch|dat\s*ke\s*hoach|defect\s*rate|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+|\bppm\b|통계|생산|생산량|불량|라인|개월)"
             patt_ascii = r"(thong\s*ke|bao\s*cao|truy\s*van|san\s*luong|nang\s*suat|day\s*chuyen|loi|nha\s*may|xuong|report|statistic|statistics|stats|analytics|query|production|output|defect|yield|tact|line|model|factory|from\s+\d{4}|\d+\s*(thang|month|nam|year)|thang\s*\d{1,2}\s*/\s*\d{4}|ti\s*le|ty\s*le|dat\s*ke\s*hoach|defect\s*rate|pareto|top\s*\d+|bottom\s*\d+|worst\s*\d+|\bppm\b)"
@@ -241,11 +294,40 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
         logger.info(f"[Intent] {intent}")
 
         # -----------------------
+        # 1.5️⃣ Context Management (Session & Factory persistence)
+        # -----------------------
+        start_time = time.time()
+        session_id = context.get("session_id") or context.get("sessionId") or str(uuid.uuid4())
+        user_id = context.get("user_id") or context.get("userId")
+        factory_code = context.get("factoryCode")
+        locale = context.get("locale", "vi")
+        
+        # Get or create conversation
+        await context_manager.get_or_create_conversation(
+            session_id=session_id,
+            user_id=user_id,
+            factory_code=factory_code,
+            locale=locale
+        )
+        
+        # Save user message
+        await context_manager.save_message(
+            session_id=session_id,
+            role="user",
+            content=user_input
+        )
+        
+        # Merge saved context with current request
+        planner_request = {"user_input": user_input, "intent": intent, "context": context}
+        planner_request = await context_manager.merge_context_with_request(session_id, planner_request)
+
+        # -----------------------
         # 2️⃣ Planner / Orchestrator
         # -----------------------
         # Use Planner orchestration: semantic -> decision -> data -> response
-        planner_request = {"user_input": user_input, "intent": intent, "context": context}
         planner_response = await planner.execute(planner_request)
+        latency_ms = int((time.time() - start_time) * 1000)
+        
         decision = planner_response
         result = planner_response.get("data", [])
         result_count = None
@@ -255,11 +337,51 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
         except Exception:
             result_count = None
 
+        # Extract and save context for future queries
+        try:
+            semantic_plan = planner_response.get("_semantic_plan")
+            execution_plan = planner_response.get("_execution_plan")
+            if semantic_plan and execution_plan:
+                await context_manager.extract_and_save_context(session_id, semantic_plan, execution_plan)
+            # Keep execution_plan in response for client/UI use, remove semantic_plan
+            planner_response.pop("_semantic_plan", None)
+            # Rename _execution_plan to decision for client
+            if execution_plan:
+                decision = execution_plan
+                planner_response.pop("_execution_plan", None)
+        except Exception as e:
+            logger.warning(f"Failed to save context: {e}")
+
+        # Save assistant message with execution details
+        await context_manager.save_message(
+            session_id=session_id,
+            role="assistant",
+            content=f"Retrieved {result_count or len(result)} records",
+            query_type=intent.get("intent"),
+            entity=execution_plan.get("entity") if 'execution_plan' in locals() else None,
+            execution_plan=execution_plan if 'execution_plan' in locals() else None,
+            result_rows=result_count or len(result),
+            latency_ms=latency_ms
+        )
+
+        # -----------------------
+        # 2.5️⃣ Generate Proactive Insights
+        # -----------------------
+        insights = None
+        if isinstance(result, list) and len(result) > 0:
+            try:
+                entity = execution_plan.get("entity") if 'execution_plan' in locals() else "production"
+                insights = insights_generator.generate_insights(result, entity=entity, locale=locale)
+            except Exception as e:
+                logger.warning(f"Failed to generate insights: {e}")
+
         debug_payload = None
         if isinstance(context, dict) and context.get("debug") is True:
             try:
-                semantic_plan = planner.semantic_resolver.resolve(planner_request)
-                execution_plan = planner.decision_engine.decide(semantic_plan)
+                if 'semantic_plan' not in locals():
+                    semantic_plan = planner.semantic_resolver.resolve(planner_request)
+                if 'execution_plan' not in locals():
+                    execution_plan = planner.decision_engine.decide(semantic_plan)
                 # QueryBuilder enriches template fields; decision engine already runs it,
                 # but keep this defensive in case wiring changes.
                 debug_payload = {
@@ -297,14 +419,24 @@ async def analyze(request: Request, authorization: str | None = Header(None)):
         # -----------------------
         # 4️⃣ Return structured response
         # -----------------------
-        return JSONResponse(content={
+        response_content = {
             "user_input": user_input,
             "intent": intent,
             "decision": decision,
             "planner_result": {"data": result, "count": (result_count if result_count is not None else len(result))},
             "chat_backend": chat_backend,
-            **({"debug": debug_payload} if debug_payload is not None else {}),
-        })
+            "session_id": session_id,
+        }
+        
+        # Add insights if generated
+        if insights:
+            response_content["insights"] = insights
+        
+        # Add debug info if requested
+        if debug_payload is not None:
+            response_content["debug"] = debug_payload
+        
+        return JSONResponse(content=response_content)
     
     except Exception as e:
         logger.exception("ERROR in /analyze")

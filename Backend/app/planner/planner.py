@@ -223,6 +223,7 @@ class Planner:
         if len(codes) > 1:
             merged_rows: list[dict] = []
             first_response: Dict[str, Any] | None = None
+            errors: list[str] = []
 
             for fc in codes:
                 req2 = copy.deepcopy(request)
@@ -233,21 +234,32 @@ class Planner:
                 ctx2.pop("factoryCodes", None)
                 req2["context"] = ctx2
 
-                resp = await self._execute_single(req2)
-                if first_response is None and isinstance(resp, dict):
-                    first_response = dict(resp)
+                try:
+                    resp = await self._execute_single(req2)
+                    if first_response is None and isinstance(resp, dict):
+                        first_response = dict(resp)
 
-                rows = resp.get("data") if isinstance(resp, dict) else None
-                if isinstance(rows, list):
-                    for r in rows:
-                        if isinstance(r, dict) and "factoryCode" not in r:
-                            r["factoryCode"] = fc
-                        if isinstance(r, dict):
-                            merged_rows.append(r)
+                    rows = resp.get("data") if isinstance(resp, dict) else None
+                    if isinstance(rows, list):
+                        for r in rows:
+                            if isinstance(r, dict) and "factoryCode" not in r:
+                                r["factoryCode"] = fc
+                            if isinstance(r, dict):
+                                merged_rows.append(r)
+                except Exception as e:
+                    logger.warning(f"Multi-factory: failed to fetch data for {fc}: {e}")
+                    errors.append(f"{fc}: {str(e)}")
+                    continue
 
             out = first_response or {"data": [], "count": 0}
             out["data"] = merged_rows
             out["count"] = len(merged_rows)
+            if errors and not merged_rows:
+                # All factories failed
+                raise RuntimeError(f"All factories failed: {'; '.join(errors)}")
+            elif errors:
+                # Some factories failed - add warning to response
+                out["warnings"] = errors
             return out
 
         # Single-factory / normal execution
@@ -273,6 +285,13 @@ class Planner:
         # 4. Response (pass execution_plan so we can perform aggregations)
         response = self._response_phase(data, execution_plan)
 
+        # 4.5 Fill missing periods in time range queries
+        response = self._fill_missing_periods(response, execution_plan)
+
+        # Add plans to response for context extraction
+        response["_semantic_plan"] = semantic_plan
+        response["_execution_plan"] = execution_plan
+
         # If a factoryCode is provided via context, surface it as a column for UI grouping.
         try:
             ctx = request.get("context") if isinstance(request, dict) else None
@@ -291,6 +310,92 @@ class Planner:
             rc = None
         logger.info("Planner.done", extra={"row_count": rc})
 
+        return response
+
+    def _fill_missing_periods(self, response: Dict[str, Any], execution_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Fill missing months/dates in time range queries with zero values."""
+        try:
+            # Only fill for time range queries with month grouping
+            group_by = execution_plan.get("group_by")
+            if not group_by or (isinstance(group_by, list) and "month" not in group_by) or (isinstance(group_by, str) and group_by != "month"):
+                return response
+            
+            # Date range might be at top level or in filters
+            filters = execution_plan.get("filters") or {}
+            from_date = execution_plan.get("from") or filters.get("from")
+            to_date = execution_plan.get("to") or filters.get("to")
+            if not from_date or not to_date:
+                return response
+            
+            rows = response.get("data")
+            if not isinstance(rows, list):
+                rows = []
+                response["data"] = rows
+            
+            # Parse date range
+            from datetime import datetime
+            from_dt = datetime.strptime(from_date[:7], "%Y-%m")  # YYYY-MM
+            to_dt = datetime.strptime(to_date[:7], "%Y-%m")
+            
+            # Generate all months in range
+            current = from_dt
+            all_months = []
+            while current <= to_dt:
+                all_months.append(f"{current.year:04d}-{current.month:02d}")
+                # Next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            # Find existing months in response
+            existing_months = set()
+            for row in rows:
+                if isinstance(row, dict):
+                    month = row.get("month")
+                    if month:
+                        existing_months.add(month)
+            
+            # Add missing months with zero values
+            if len(existing_months) < len(all_months):
+                # Get template from first row, or create minimal template
+                if rows:
+                    template = rows[0].copy()
+                else:
+                    # Create minimal template for empty response
+                    ctx = execution_plan.get("filters", {})
+                    template = {
+                        "month": "",
+                        "totalActualQty": 0,
+                        "totalPlanQty": 0,
+                        "totalDefectQty": 0,
+                    }
+                    fc = ctx.get("factoryCode")
+                    if fc:
+                        template["factoryCode"] = fc
+                
+                for month in all_months:
+                    if month not in existing_months:
+                        zero_row = template.copy()
+                        zero_row["month"] = month
+                        # Set numeric fields to 0
+                        for key in zero_row:
+                            if key not in ["month", "factoryCode", "line", "model", "date"]:
+                                if isinstance(zero_row[key], (int, float)):
+                                    zero_row[key] = 0
+                                elif isinstance(zero_row[key], str) and "%" in zero_row[key]:
+                                    zero_row[key] = "0.0%"
+                        rows.append(zero_row)
+                
+                # Sort by month
+                rows.sort(key=lambda x: x.get("month", ""))
+                response["data"] = rows
+                response["count"] = len(rows)
+                logger.info(f"Filled {len(all_months) - len(existing_months)} missing months in range {from_date} to {to_date}")
+        
+        except Exception as e:
+            logger.warning(f"Failed to fill missing periods: {e}")
+        
         return response
 
     def _maybe_build_dynamic_computed_plan(self, execution_plan: Dict[str, Any]) -> Dict[str, Any]:
@@ -654,11 +759,62 @@ class Planner:
                     key_parts: list[str] = []
                     for dim in group_dims:
                         dim_val = None
-                        for p in _candidates_for_dim(dim):
-                            v = _safe_get_path(r, p)
-                            if v is not None and str(v).strip() != "":
-                                dim_val = str(v)
-                                break
+                        
+                        # Special handling for symptom: extract both code and name
+                        if dim == "symptom":
+                            code_val = None
+                            name_val = None
+                            candidates = _candidates_for_dim(dim)
+                            
+                            # Try to find code field (usually contains "code" in path)
+                            for p in candidates:
+                                if "code" in p.lower() or p.lower() in ("symptom", "defectcode", "defecttype"):
+                                    v = _safe_get_path(r, p)
+                                    if v is not None and str(v).strip() != "":
+                                        code_val = str(v).strip()
+                                        break
+                            
+                            # Try to find name field (usually contains "name" in path)
+                            for p in candidates:
+                                if "name" in p.lower() or p.lower() == "ngreason":
+                                    v = _safe_get_path(r, p)
+                                    if v is not None and str(v).strip() != "":
+                                        name_val = str(v).strip()
+                                        break
+                            
+                            # Combine code and name
+                            if code_val and name_val:
+                                dim_val = f"{code_val} - {name_val}"
+                            elif name_val:
+                                dim_val = name_val
+                            elif code_val:
+                                dim_val = code_val
+                        else:
+                            # Standard dimension extraction
+                            for p in _candidates_for_dim(dim):
+                                v = _safe_get_path(r, p)
+                                if v is not None and str(v).strip() != "":
+                                    # Special handling for dimensions that might be objects
+                                    if isinstance(v, dict):
+                                        # Extract meaningful fields from object based on dimension type
+                                        if dim == "line":
+                                            dim_val = v.get("code") or v.get("lineCode") or v.get("name") or v.get("lineName")
+                                        elif dim == "model":
+                                            dim_val = v.get("code") or v.get("modelCode") or v.get("name") or v.get("modelName")
+                                        elif dim == "shift":
+                                            dim_val = v.get("code") or v.get("shiftCode") or v.get("name") or v.get("shiftName")
+                                        elif dim == "processType":
+                                            dim_val = v.get("code") or v.get("name")
+                                        else:
+                                            # Generic: try code, name, or id
+                                            dim_val = v.get("code") or v.get("name") or v.get("id")
+                                        
+                                        if dim_val:
+                                            dim_val = str(dim_val)
+                                            break
+                                    else:
+                                        dim_val = str(v)
+                                        break
 
                         # Derive higher-level time dims from any available date field.
                         if (dim_val is None or str(dim_val).strip() == "") and dim in ("month", "year", "quarter", "week"):
@@ -1168,6 +1324,14 @@ class Planner:
 
             result = _apply_order_by(result, order_by)
             result = _apply_limit(result, limit)
+            
+            # Enrich with computed metrics
+            try:
+                from .metrics_insights import metrics_computer
+                result = metrics_computer.enrich_rows(result)
+            except Exception as e:
+                logger.warning(f"Failed to enrich metrics: {e}")
+            
             return {"data": result, "count": len(result)}
 
         # Generic multi-dimension aggregation (config-driven group_by list)
@@ -1499,7 +1663,23 @@ class Planner:
                 result.append(v)
 
             result = _apply_order_by(result, order_by)
+            result = _apply_limit(result, limit)
+            
+            # Enrich with computed metrics
+            try:
+                from .metrics_insights import metrics_computer
+                result = metrics_computer.enrich_rows(result)
+            except Exception as e:
+                logger.warning(f"Failed to enrich metrics: {e}")
+            
             return {"data": result, "count": len(result)}
 
-        # default: return raw rows
+        # default: return raw rows with computed metrics
+        try:
+            from .metrics_insights import metrics_computer
+            locale = request.get("context", {}).get("locale", "vi")
+            data = metrics_computer.enrich_rows(data if isinstance(data, list) else [], locale=locale)
+        except Exception as e:
+            logger.warning(f"Failed to enrich metrics: {e}")
+        
         return {"data": data, "count": len(data)}

@@ -25,6 +25,8 @@ services:
       '
     depends_on:
       - model
+      - redis
+      - postgres
 
   model:
     image: ghcr.io/ggml-org/llama.cpp:full
@@ -39,3 +41,38 @@ services:
       --host 0.0.0.0
       --port 8080
       -c 4096
+
+  redis:
+    image: redis:7-alpine
+    container_name: sun_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sun_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: sun_mes
+      POSTGRES_USER: sun_user
+      POSTGRES_PASSWORD: sun_pass_2026
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sun_user -d sun_mes"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis_data:
+  postgres_data:

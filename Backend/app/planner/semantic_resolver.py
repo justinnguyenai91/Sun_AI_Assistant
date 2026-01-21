@@ -76,10 +76,34 @@ class SemanticResolver:
                 auth["mes_token"] = token.strip()
 
         # Allow inline mention in text (e.g., "FAC01", "DJVN1")
+        # If not found in text and not set via context.factoryCode, try saved context
         if "factoryCode" not in params:
             m_fc = re.search(r"\b([A-Z]{2,6}\d{1,4})\b", str(raw).upper())
             if m_fc:
                 params["factoryCode"] = m_fc.group(1)
+            else:
+                # Fallback to saved context from previous queries
+                saved_context = request.get("_saved_context") if isinstance(request, dict) else None
+                if isinstance(saved_context, dict):
+                    saved_fc = saved_context.get("factory_code")
+                    if saved_fc:
+                        params["factoryCode"] = saved_fc
+                        import logging
+                        logging.getLogger(__name__).info(f"Using factoryCode from saved context: {saved_fc}")
+
+        # ------------------------------------------------------------
+        # Infer entity from saved context if not explicitly mentioned
+        # This helps with follow-up queries like "thế còn tháng 11" or "từ tháng 9 đến 1"
+        # ------------------------------------------------------------
+        if "_saved_context" in request and isinstance(request.get("_saved_context"), dict):
+            saved_context = request["_saved_context"]
+            # If no entity mentioned and we have saved entity, use it
+            if not intent.get("entity") or str(intent.get("entity", "")).strip() in ("", "None"):
+                saved_entity = saved_context.get("last_entity")
+                if saved_entity:
+                    intent["entity"] = saved_entity
+                    import logging
+                    logging.getLogger(__name__).info(f"Using entity from saved context: {saved_entity}")
 
         # ------------------------------------------------------------
         # Time range extraction (supports explicit VN month range)
@@ -115,6 +139,163 @@ class SemanticResolver:
                 return {"from": from_d.isoformat(), "to": to_d.isoformat()}
             except Exception:
                 return None
+
+        # ============================================================
+        # NOW - Current moment (treated as "today" for date filters)
+        # ============================================================
+        m_now = re.search(r"\b(hiện\s*tại|hien\s*tai|bây\s*giờ|bay\s*gio|lúc\s*này|luc\s*nay|now|right\s*now)\b", raw, re.IGNORECASE)
+        if m_now:
+            today = date.today()
+            time_range = {"from": today.isoformat(), "to": today.isoformat()}
+
+        # ============================================================
+        # CURRENT_PERIOD - Today, this week, this month, this quarter, this year
+        # ============================================================
+        if time_range is None:
+            # Hôm nay / today
+            m_today = re.search(r"\b(hôm\s*nay|hom\s*nay|today)\b", raw, re.IGNORECASE)
+            if m_today:
+                today = date.today()
+                time_range = {"from": today.isoformat(), "to": today.isoformat()}
+        
+        if time_range is None:
+            # Tuần này / this week
+            m_this_week = re.search(r"\b(tuần\s*này|tuan\s*nay|this\s*week)\b", raw, re.IGNORECASE)
+            if m_this_week:
+                today = date.today()
+                iso_year, iso_week, iso_day = today.isocalendar()
+                from_d = date.fromisocalendar(iso_year, iso_week, 1)
+                to_d = date.fromisocalendar(iso_year, iso_week, 7)
+                time_range = {"from": from_d.isoformat(), "to": to_d.isoformat()}
+        
+        if time_range is None:
+            # Tháng này / this month
+            m_this_month = re.search(r"\b(tháng\s*này|thang\s*nay|this\s*month)\b", raw, re.IGNORECASE)
+            if m_this_month:
+                today = date.today()
+                from_date = f"{today.year:04d}-{today.month:02d}-01"
+                last_day = _safe_last_day_of_month(today.year, today.month)
+                to_date = f"{today.year:04d}-{today.month:02d}-{last_day:02d}"
+                time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
+        
+        if time_range is None:
+            # Quý này / this quarter
+            m_this_quarter = re.search(r"\b(quý\s*này|quy\s*nay|this\s*quarter)\b", raw, re.IGNORECASE)
+            if m_this_quarter:
+                today = date.today()
+                current_quarter = (today.month - 1) // 3 + 1
+                tr = _quarter_to_dates(today.year, current_quarter)
+                if tr:
+                    time_range = tr
+        
+        if time_range is None:
+            # Năm nay / this year
+            m_this_year = re.search(r"\b(năm\s*nay|nam\s*nay|this\s*year)\b", raw, re.IGNORECASE)
+            if m_this_year:
+                today = date.today()
+                time_range = {"from": f"{today.year:04d}-01-01", "to": f"{today.year:04d}-12-31"}
+                time_granularity_hint = "year"
+
+        # ============================================================
+        # PREVIOUS_PERIOD - Yesterday, last week, last month, last quarter, last year
+        # ============================================================
+        if time_range is None:
+            # Hôm qua / yesterday
+            m_yesterday = re.search(r"\b(hôm\s*qua|hom\s*qua|yesterday)\b", raw, re.IGNORECASE)
+            if m_yesterday:
+                from datetime import timedelta
+                yesterday = date.today() - timedelta(days=1)
+                time_range = {"from": yesterday.isoformat(), "to": yesterday.isoformat()}
+        
+        if time_range is None:
+            # Tuần trước / last week
+            m_last_week = re.search(r"\b(tuần\s*trước|tuan\s*truoc|last\s*week)\b", raw, re.IGNORECASE)
+            if m_last_week:
+                today = date.today()
+                iso_year, iso_week, iso_day = today.isocalendar()
+                # Go back 1 week
+                if iso_week == 1:
+                    iso_year -= 1
+                    iso_week = 52  # Approximate
+                else:
+                    iso_week -= 1
+                from_d = date.fromisocalendar(iso_year, iso_week, 1)
+                to_d = date.fromisocalendar(iso_year, iso_week, 7)
+                time_range = {"from": from_d.isoformat(), "to": to_d.isoformat()}
+        
+        if time_range is None:
+            # Tháng trước / last month
+            m_last_month = re.search(r"\b(tháng\s*trước|thang\s*truoc|last\s*month)\b", raw, re.IGNORECASE)
+            if m_last_month:
+                today = date.today()
+                if today.month == 1:
+                    last_month_year = today.year - 1
+                    last_month = 12
+                else:
+                    last_month_year = today.year
+                    last_month = today.month - 1
+                from_date = f"{last_month_year:04d}-{last_month:02d}-01"
+                last_day = _safe_last_day_of_month(last_month_year, last_month)
+                to_date = f"{last_month_year:04d}-{last_month:02d}-{last_day:02d}"
+                time_range = {"from": from_date, "to": to_date}
+                time_granularity_hint = "month"
+        
+        if time_range is None:
+            # Quý trước / last quarter
+            m_last_quarter = re.search(r"\b(quý\s*trước|quy\s*truoc|last\s*quarter)\b", raw, re.IGNORECASE)
+            if m_last_quarter:
+                today = date.today()
+                current_quarter = (today.month - 1) // 3 + 1
+                if current_quarter == 1:
+                    last_quarter_year = today.year - 1
+                    last_quarter = 4
+                else:
+                    last_quarter_year = today.year
+                    last_quarter = current_quarter - 1
+                tr = _quarter_to_dates(last_quarter_year, last_quarter)
+                if tr:
+                    time_range = tr
+        
+        if time_range is None:
+            # Năm trước / last year
+            m_last_year = re.search(r"\b(năm\s*trước|nam\s*truoc|last\s*year)\b", raw, re.IGNORECASE)
+            if m_last_year:
+                today = date.today()
+                last_year = today.year - 1
+                time_range = {"from": f"{last_year:04d}-01-01", "to": f"{last_year:04d}-12-31"}
+                time_granularity_hint = "year"
+
+        # ============================================================
+        # TO_DATE - Month/Quarter/Year to date (MTD, QTD, YTD)
+        # ============================================================
+        if time_range is None:
+            # Month to date / MTD / từ đầu tháng đến nay
+            m_mtd = re.search(r"\b(MTD|month[\s\-]*to[\s\-]*date|từ\s*đầu\s*tháng|tu\s*dau\s*thang)\b", raw, re.IGNORECASE)
+            if m_mtd:
+                today = date.today()
+                from_date = f"{today.year:04d}-{today.month:02d}-01"
+                time_range = {"from": from_date, "to": today.isoformat()}
+                time_granularity_hint = "month"
+        
+        if time_range is None:
+            # Quarter to date / QTD / từ đầu quý đến nay
+            m_qtd = re.search(r"\b(QTD|quarter[\s\-]*to[\s\-]*date|từ\s*đầu\s*quý|tu\s*dau\s*quy)\b", raw, re.IGNORECASE)
+            if m_qtd:
+                today = date.today()
+                current_quarter = (today.month - 1) // 3 + 1
+                start_m = (current_quarter - 1) * 3 + 1
+                from_date = f"{today.year:04d}-{start_m:02d}-01"
+                time_range = {"from": from_date, "to": today.isoformat()}
+        
+        if time_range is None:
+            # Year to date / YTD / từ đầu năm đến nay
+            m_ytd = re.search(r"\b(YTD|year[\s\-]*to[\s\-]*date|từ\s*đầu\s*năm|tu\s*dau\s*nam)\b", raw, re.IGNORECASE)
+            if m_ytd:
+                today = date.today()
+                from_date = f"{today.year:04d}-01-01"
+                time_range = {"from": from_date, "to": today.isoformat()}
+                time_granularity_hint = "year"
 
         # ISO date range: from YYYY-MM-DD to YYYY-MM-DD (supports VN + ASCII)
         m_iso = re.search(
@@ -177,6 +358,17 @@ class SemanticResolver:
             if m_y:
                 yy = int(m_y.group(1))
                 time_range = {"from": f"{yy:04d}-01-01", "to": f"{yy:04d}-12-31"}
+                time_granularity_hint = "year"
+
+        # Year range: "từ năm YYYY đến năm YYYY"
+        if time_range is None:
+            m_yr = re.search(r"\b(từ|tu|from)\s*(?:năm|nam|year)\s*(\d{4})\s*(đến|den|to)\s*(?:năm|nam|year)?\s*(\d{4})\b", raw, re.IGNORECASE)
+            if m_yr:
+                y1 = int(m_yr.group(2))
+                y2 = int(m_yr.group(4))
+                if y2 < y1:
+                    y1, y2 = y2, y1
+                time_range = {"from": f"{y1:04d}-01-01", "to": f"{y2:04d}-12-31"}
                 time_granularity_hint = "year"
 
         # VN month range: từ tháng M đến tháng N năm YYYY
@@ -291,6 +483,28 @@ class SemanticResolver:
                 time_granularity_hint = "month"
 
         # Fallback: simple relative ranges ("6 tháng", "1 year", "3개월")
+        # Priority 1: "X tháng/tuần/năm gần nhất" (most recent)
+        if time_range is None:
+            # Match: "3 tháng gần nhất", "1 tuần gần nhất", "2 năm gần nhất"
+            m_recent = re.search(
+                r"(\d+)\s*(năm|nam|year|years|tháng|thang|month|months|tuần|tuan|week|weeks|ngày|ngay|day|days)\s*(?:gần\s*nhất|gan\s*nhat|recent|latest|last)",
+                raw,
+                re.IGNORECASE
+            )
+            if m_recent:
+                value = int(m_recent.group(1))
+                unit_text = m_recent.group(2).lower()
+                # Normalize to standard units
+                if any(x in unit_text for x in ["năm", "nam", "year"]):
+                    time_range = {"value": value, "unit": "years"}
+                elif any(x in unit_text for x in ["tháng", "thang", "month"]):
+                    time_range = {"value": value, "unit": "months"}
+                elif any(x in unit_text for x in ["tuần", "tuan", "week"]):
+                    time_range = {"value": value, "unit": "weeks"}
+                elif any(x in unit_text for x in ["ngày", "ngay", "day"]):
+                    time_range = {"value": value, "unit": "days"}
+        
+        # Priority 2: Simple "X tháng", "X year" without "gần nhất"
         if time_range is None:
             m = re.search(r"(\d+)\s*(năm|nam|year|years|년)", raw)
             if m:
@@ -302,23 +516,120 @@ class SemanticResolver:
                     months = int(m2.group(1))
                     time_range = {"value": months, "unit": "months"}
 
+        # ============================================================
+        # BEFORE_AFTER - Before/after a specific date
+        # ============================================================
+        if time_range is None:
+            # Before date: "trước ngày 2026-01-15" / "before 2026-01-15"
+            m_before = re.search(r"\b(trước|truoc|before)\s*(?:ngày|ngay)?\s*(\d{4}-\d{2}-\d{2})\b", raw, re.IGNORECASE)
+            if m_before:
+                target_date = m_before.group(2)
+                # Use a very early date as "from" (100 years ago)
+                from datetime import timedelta
+                early_date = (date.today() - timedelta(days=36500)).isoformat()
+                time_range = {"from": early_date, "to": target_date}
+        
+        if time_range is None:
+            # After date: "sau ngày 2026-01-15" / "after 2026-01-15"
+            m_after = re.search(r"\b(sau|after)\s*(?:ngày|ngay)?\s*(\d{4}-\d{2}-\d{2})\b", raw, re.IGNORECASE)
+            if m_after:
+                target_date = m_after.group(2)
+                # Use far future date as "to" (10 years ahead)
+                from datetime import timedelta
+                future_date = (date.today() + timedelta(days=3650)).isoformat()
+                time_range = {"from": target_date, "to": future_date}
+
+        # ============================================================
+        # HOUR_RANGE - Hour range filter (stored for shift/time filter)
+        # ============================================================
+        # Pattern: "từ 8h đến 17h", "from 8:00 to 17:00"
+        m_hour_range = re.search(r"\b(từ|tu|from)\s*(\d{1,2})(?:h|:|giờ)?\s*(?:00)?\s*(đến|den|to)\s*(\d{1,2})(?:h|:|giờ)?\s*(?:00)?\b", raw, re.IGNORECASE)
+        if m_hour_range:
+            hour_from = int(m_hour_range.group(2))
+            hour_to = int(m_hour_range.group(4))
+            if 0 <= hour_from <= 23 and 0 <= hour_to <= 23:
+                params["hour_range"] = {"from": hour_from, "to": hour_to}
+
         if time_range:
             params["time_range"] = time_range
 
         # Group-by extraction from text via registry (config-driven)
         group_by = registry.parse_group_by(raw)
 
+        # Detect defect symptom analysis patterns
+        # This indicates user wants defect breakdown by symptom, not just total count
+        # Patterns: "lỗi nào", "chi tiết lỗi", "hạng mục lỗi", "defect items", etc.
+        # BUT: If user explicitly requests spatial dimensions (line, model, process), respect that instead
+        if not group_by or not isinstance(group_by, list) or "symptom" not in group_by:
+            # Check if user wants ANY dimension grouping (time or spatial)
+            # Spatial: "theo line", "cho line", "theo từng line", "cho từng line", "by line", "by model"
+            # Time: "theo tháng", "cho tháng", "by month", etc.
+            spatial_dimension_pattern = r"\b((theo|cho)\s+(từng\s+|mỗi\s+|each\s+)?(line|dây|day|model|mẫu|mau|process|công\s*đoạn|cong\s*doan)|by\s+(each\s+)?(line|model|process))\b"
+            time_dimension_pattern = r"\b((theo|cho)\s+(từng\s+|mỗi\s+|each\s+)?(tháng|thang|ngày|ngay|tuần|tuan|quý|quy|năm|nam|ca|shift)|by\s+(each\s+)?(month|day|week|quarter|year|shift))\b"
+            
+            has_spatial_grouping = re.search(spatial_dimension_pattern, raw, re.IGNORECASE)
+            has_time_grouping = re.search(time_dimension_pattern, raw, re.IGNORECASE)
+            
+            # Defect symptom breakdown patterns
+            defect_pattern = r"\b(" \
+                r"lỗi\s+nào|loi\s+nao|" \
+                r"lỗi\s+nhiều\s*nhất|loi\s+nhieu\s*nhat|" \
+                r"loại\s+lỗi|loai\s+loi|" \
+                r"dạng\s+lỗi|dang\s+loi|" \
+                r"chi\s*tiết\s+lỗi|chi\s*tiet\s+loi|" \
+                r"chi\s*tiết\s+defect|chi\s*tiet\s+defect|" \
+                r"chi\s*tiết\s+(defect\s+)?symptom|chi\s*tiet\s+(defect\s+)?symptom|" \
+                r"chi\s*tiết\s+hạng\s*mục\s+lỗi|chi\s*tiet\s+hang\s*muc\s+loi|" \
+                r"hạng\s*mục\s+lỗi|hang\s*muc\s+loi|" \
+                r"danh\s*sách\s+lỗi|danh\s*sach\s+loi|" \
+                r"liệt\s*kê\s+lỗi|liet\s*ke\s+loi|" \
+                r"phân\s*tích\s+lỗi|phan\s*tich\s+loi|" \
+                r"defect\s+items?|" \
+                r"defect\s+symptom\s+items?|" \
+                r"defect\s+types?|" \
+                r"error\s+types?|" \
+                r"defect\s+breakdown|" \
+                r"error\s+breakdown|" \
+                r"symptom\s+breakdown|" \
+                r"symptom\s+analysis|" \
+                r"defect\s+details?|" \
+                r"error\s+details?|" \
+                r"list\s+of\s+(defects?|errors?)|" \
+                r"which\s+(error|defect)|" \
+                r"top.*lỗi|top.*loi" \
+                r")\b"
+            
+            # Add symptom grouping ONLY if:
+            # 1. Defect pattern detected (chi tiết lỗi, lỗi nào, etc.)
+            # 2. No explicit spatial dimension requested (theo line, by model)
+            # 3. No time dimension requested (theo tháng, by day)
+            # Reasoning: "chi tiết lỗi theo line" → user wants line grouping with defect details, NOT symptom breakdown
+            if re.search(defect_pattern, raw, re.IGNORECASE) and not has_spatial_grouping and not has_time_grouping:
+                if not group_by:
+                    group_by = ["symptom"]
+                elif isinstance(group_by, list) and "symptom" not in group_by:
+                    group_by.append("symptom")
+                import logging
+                logging.getLogger(__name__).info(f"Detected defect symptom pattern (no dimension conflict) → added group_by symptom")
+
         # If user asked for a specific month (e.g., "Jan 2026" / "tháng 1/2026")
         # but didn't specify a grouping dimension, default to monthly buckets.
         if (not group_by) and time_granularity_hint == "month":
             group_by = ["month"]
 
-        # Pareto/top defect types intent: when symptom is requested, treat time words as time filters,
-        # not a second grouping dimension.
+        # Clean up time-based grouping when symptom is primary dimension
+        # Symptom queries should treat time as filter, not grouping
+        # But keep spatial dimensions (line/model/process) if they exist
         if isinstance(group_by, list) and group_by and "symptom" in group_by:
-            group_by = [g for g in group_by if g not in ("date", "week", "month", "quarter", "year")]
+            # Remove only time-based dimensions, keep spatial ones
+            original_group_by = group_by.copy()
+            group_by = [g for g in group_by if g not in ("date", "week", "month", "quarter", "year", "shift")]
+            
             if not group_by:
                 group_by = ["symptom"]
+            import logging
+            if original_group_by != group_by:
+                logging.getLogger(__name__).info(f"Removed time dimensions from symptom query: {original_group_by} → {group_by}")
 
         if group_by:
             params["group_by"] = group_by
@@ -445,6 +756,32 @@ class SemanticResolver:
                 params["order_by"] = {"field": "defect_count", "direction": "desc"}
             elif re.search(r"\b(actual|thực\s*tế|thuc\s*te)\b", raw_lc, re.IGNORECASE):
                 params["order_by"] = {"field": "actual_production_qty", "direction": "desc"}
+
+        # If query is about defect symptom breakdown with "nhiều nhất"/"most", auto-sort by defect_count
+        if "order_by" not in params:
+            if params.get("group_by") and isinstance(params.get("group_by"), list) and "symptom" in params["group_by"]:
+                if re.search(r"\b(nhiều\s*nhất|nhieu\s*nhat|most|highest|top)\b", raw_lc, re.IGNORECASE):
+                    params["order_by"] = {"field": "defect_count", "direction": "desc"}
+                    params.setdefault("limit", 10)  # Default to top 10 if not specified
+                    import logging
+                    logging.getLogger(__name__).info(f"Auto-sorting symptom breakdown by defect_count desc with limit 10")
+
+        # Default entity to production if we have time range but no explicit entity
+        # This handles queries like "kiểm tra từ tháng 9 đến tháng 12"
+        entity_str = str(intent.get("entity", "")).strip()
+        is_empty_entity = entity_str in ("", "None") or re.search(r"(từ|from|đến|to|tháng|month|năm|year|/|\d{4})", entity_str, re.IGNORECASE)
+        
+        # Override entity to "defect" if query is about defect breakdown (symptom)
+        # E.g., "lỗi nào nhiều nhất" should query defect entity, not production
+        if params.get("group_by") and isinstance(params.get("group_by"), list) and "symptom" in params["group_by"]:
+            intent["entity"] = "defect"
+            import logging
+            logging.getLogger(__name__).info(f"Overriding entity to 'defect' for symptom breakdown query")
+        elif is_empty_entity:
+            if params.get("time_range") or params.get("from") or params.get("to"):
+                intent["entity"] = "production"
+                import logging
+                logging.getLogger(__name__).info(f"Defaulting entity to 'production' for time range query (was: '{entity_str}')")
 
         out = {
             "intent": intent.get("intent"),

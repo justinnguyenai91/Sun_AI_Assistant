@@ -106,6 +106,7 @@ class ApiDataAdapter:
                 pass
 
     def _resolve_base_url(self, execution_plan: Dict[str, Any]) -> str | None:
+        logger = logging.getLogger(__name__)
         filters = execution_plan.get("filters", {}) or {}
         if isinstance(filters, list):
             filters = next((x for x in filters if isinstance(x, dict)), {})
@@ -119,11 +120,17 @@ class ApiDataAdapter:
             params = {}
         fc = filters.get("factoryCode") or params.get("factoryCode") or execution_plan.get("factoryCode")
         if isinstance(fc, str) and fc.strip():
-            base = self._factory_base_urls.get(fc.strip().upper())
+            fc_upper = fc.strip().upper()
+            base = self._factory_base_urls.get(fc_upper)
             if base:
+                logger.info(f"[MES] Resolved base URL for factory {fc_upper}: {base}")
                 return base
+            else:
+                logger.warning(f"[MES] No base URL configured for factory {fc_upper}, available: {list(self._factory_base_urls.keys())}")
         # fallback to global base
-        return os.getenv("EXTERNAL_API_BASE_URL")
+        fallback = os.getenv("EXTERNAL_API_BASE_URL")
+        logger.info(f"[MES] Using fallback base URL: {fallback} (factoryCode={fc})")
+        return fallback
 
     def _resolve_factory_defaults(self, execution_plan: Dict[str, Any]) -> Dict[str, Any]:
         filters = execution_plan.get("filters", {}) or {}
@@ -231,6 +238,7 @@ class ApiDataAdapter:
             return self.base_url.replace("/report", str(ep).strip())
 
         def _build_effective_filters() -> Dict[str, Any]:
+            from datetime import date, timedelta
             effective: Dict[str, Any] = {}
             for k, v in (self._resolve_factory_defaults(execution_plan) or {}).items():
                 if v is None:
@@ -240,6 +248,30 @@ class ApiDataAdapter:
             if isinstance(filters_local, dict):
                 for k, v in filters_local.items():
                     effective[str(k)] = v
+            
+            # Convert time_range {value, unit} to from/to dates if not already present
+            tr = effective.get("time_range")
+            if tr and isinstance(tr, dict) and "from" not in effective:
+                val = tr.get("value")
+                unit = tr.get("unit", "").lower()
+                today = date.today()
+                if unit.startswith("year") and isinstance(val, int):
+                    from_date = today - timedelta(days=365 * val)
+                    effective["from"] = from_date.isoformat()
+                    effective["to"] = today.isoformat()
+                elif unit.startswith("month") and isinstance(val, int):
+                    from_date = today - timedelta(days=30 * val)
+                    effective["from"] = from_date.isoformat()
+                    effective["to"] = today.isoformat()
+                elif unit.startswith("week") and isinstance(val, int):
+                    from_date = today - timedelta(weeks=val)
+                    effective["from"] = from_date.isoformat()
+                    effective["to"] = today.isoformat()
+                elif unit.startswith("day") and isinstance(val, int):
+                    from_date = today - timedelta(days=val)
+                    effective["from"] = from_date.isoformat()
+                    effective["to"] = today.isoformat()
+            
             return effective
 
         def _apply_fixed_and_mapped(target: Dict[str, Any], effective_filters: Dict[str, Any]):
@@ -399,6 +431,18 @@ class ApiDataAdapter:
                         from_date = today - timedelta(days=30 * months)
                         params.setdefault("from", from_date.isoformat())
                         params.setdefault("to", today.isoformat())
+                    elif unit.startswith("week") and isinstance(val, int):
+                        weeks = val
+                        today = date.today()
+                        from_date = today - timedelta(weeks=weeks)
+                        params.setdefault("from", from_date.isoformat())
+                        params.setdefault("to", today.isoformat())
+                    elif unit.startswith("day") and isinstance(val, int):
+                        days = val
+                        today = date.today()
+                        from_date = today - timedelta(days=days)
+                        params.setdefault("from", from_date.isoformat())
+                        params.setdefault("to", today.isoformat())
                 elif isinstance(tr, str) and tr.endswith("_years"):
                     try:
                         years = int(tr.split("_")[0])
@@ -460,6 +504,10 @@ class ApiDataAdapter:
                     params,
                     safe_headers,
                 )
+                # Handle 404 gracefully - no data available
+                if r.status_code == 404:
+                    logger.info("MES API returned 404 - no data available for query")
+                    return []
                 raise RuntimeError(f"mes_upstream_non_200: status={r.status_code}")
             try:
                 data = r.json()
@@ -507,6 +555,10 @@ class ApiDataAdapter:
                     self.base_url,
                     safe_headers,
                 )
+                # Handle 404 gracefully - no data available
+                if r.status_code == 404:
+                    logger.info("MES API returned 404 - no data available for query")
+                    return []
                 raise RuntimeError(f"mes_upstream_non_200: status={r.status_code}")
 
             try:
@@ -600,7 +652,226 @@ class ApiDataAdapter:
                         "row_count": len(data),
                     },
                 )
+            
+            # ============================================================
+            # POST-PROCESSING: Enrich defect data with line info from PO
+            # ============================================================
+            # If this is a defect query that needs line grouping, but defect API
+            # doesn't return line info, join with production order data via PO number.
+            await self._enrich_defect_with_line_info(execution_plan, data, headers)
+            
             return data
 
         logger.warning("MES returned unexpected JSON structure: %s", type(data))
         return []
+
+    async def _enrich_defect_with_line_info(
+        self, 
+        execution_plan: Dict[str, Any], 
+        defect_rows: List[Dict[str, Any]], 
+        headers: Dict[str, str]
+    ) -> None:
+        """
+        Enrich defect data with line information from production order API.
+        
+        Defect API (/process-defect/search-v2) doesn't include line info,
+        but production order API does. We join via PO number and factory code.
+        
+        This method modifies defect_rows in-place.
+        """
+        if not defect_rows:
+            return
+        
+        # Check if this is a defect query that needs line enrichment
+        endpoint = execution_plan.get("endpoint", "")
+        group_by = execution_plan.get("group_by") or []
+        if not isinstance(group_by, list):
+            group_by = [group_by] if group_by else []
+        
+        # Only enrich if:
+        # 1. This is a defect endpoint
+        # 2. User requested group by line (or model/process that also need PO data)
+        if "/process-defect/search" not in endpoint and "/processDefect/search" not in endpoint:
+            return
+        
+        needs_enrichment = any(dim in group_by for dim in ["line", "model", "process"])
+        if not needs_enrichment:
+            return
+        
+        # Extract unique PO numbers from defect data
+        po_field_candidates = [
+            "processDefect.productionOrder.code",
+            "processDefect.productionOrder.poCode", 
+            "processDefect.poCode",
+            "productionOrder.code",
+            "productionOrder.poCode",
+            "poCode",
+            "po_code",
+            "po",
+            "productionOrderCode"
+        ]
+        
+        po_numbers = set()
+        for row in defect_rows:
+            for field in po_field_candidates:
+                val = self._get_nested_value(row, field)
+                if val and isinstance(val, str):
+                    po_numbers.add(val)
+                    break
+        
+        if not po_numbers:
+            logger.debug("No PO numbers found in defect data, cannot enrich with line info")
+            return
+        
+        logger.info(f"Enriching {len(defect_rows)} defect rows with line info from {len(po_numbers)} POs")
+        
+        # Query production order API to get line info for these POs
+        filters = execution_plan.get("filters", {}) or {}
+        factory_code = filters.get("factoryCode") or filters.get("factory_code")
+        
+        # Build PO search request
+        po_url = self._build_po_search_url(execution_plan)
+        po_params = {
+            "pageSize": 1000,
+            "pageNumber": 0
+        }
+        
+        # Add factory filter if available
+        if factory_code:
+            # Try both factoryPk (singular) and factoryPks (plural)
+            po_params["factoryPk"] = factory_code
+        
+        # Query for specific PO codes (if API supports it)
+        # Note: Some MES APIs support poCodes filter, others require fetching all and filtering
+        po_list = ",".join(sorted(po_numbers)[:100])  # Limit to first 100 POs to avoid URL length issues
+        po_params["poCodes"] = po_list
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                logger.debug(f"Fetching PO data from {po_url} with params={po_params}")
+                r = await client.get(po_url, params=po_params, headers=headers)
+                
+                if r.status_code != 200:
+                    logger.warning(f"PO API returned {r.status_code}, cannot enrich defect data")
+                    return
+                
+                po_data = r.json()
+                
+                # Extract PO rows from response
+                po_rows = []
+                if isinstance(po_data, dict) and "data" in po_data:
+                    inner = po_data.get("data")
+                    if isinstance(inner, list):
+                        po_rows = inner
+                    elif isinstance(inner, dict):
+                        po_rows = inner.get("content") or inner.get("rows") or []
+                elif isinstance(po_data, dict) and "content" in po_data:
+                    po_rows = po_data.get("content", [])
+                elif isinstance(po_data, list):
+                    po_rows = po_data
+                
+                if not po_rows:
+                    logger.warning("No PO data returned from production order API")
+                    return
+                
+                # Build PO number -> line info mapping
+                po_to_line_map = {}
+                for po_row in po_rows:
+                    po_code = (
+                        po_row.get("poCode") or 
+                        po_row.get("po_code") or 
+                        po_row.get("code") or
+                        po_row.get("productionOrderCode")
+                    )
+                    if not po_code:
+                        continue
+                    
+                    # Extract line info from PO row
+                    line_info = {
+                        "lineCode": (
+                            self._get_nested_value(po_row, "line.code") or
+                            po_row.get("lineCode") or
+                            po_row.get("line_code")
+                        ),
+                        "lineName": (
+                            self._get_nested_value(po_row, "line.name") or
+                            po_row.get("lineName") or
+                            po_row.get("line_name")
+                        ),
+                        "modelCode": (
+                            self._get_nested_value(po_row, "model.code") or
+                            po_row.get("modelCode") or
+                            po_row.get("model_code")
+                        ),
+                        "modelName": (
+                            self._get_nested_value(po_row, "model.name") or
+                            po_row.get("modelName") or
+                            po_row.get("model_name")
+                        ),
+                        "processTypeCode": (
+                            self._get_nested_value(po_row, "process.code") or
+                            po_row.get("processTypeCode") or
+                            po_row.get("process_code")
+                        ),
+                        "processTypeName": (
+                            self._get_nested_value(po_row, "process.name") or
+                            po_row.get("processTypeName") or
+                            po_row.get("process_name")
+                        )
+                    }
+                    po_to_line_map[po_code] = line_info
+                
+                logger.info(f"Built PO -> line mapping with {len(po_to_line_map)} entries")
+                
+                # Enrich defect rows with line info
+                enriched_count = 0
+                for row in defect_rows:
+                    # Find PO code in defect row
+                    po_code = None
+                    for field in po_field_candidates:
+                        val = self._get_nested_value(row, field)
+                        if val and isinstance(val, str):
+                            po_code = val
+                            break
+                    
+                    if not po_code or po_code not in po_to_line_map:
+                        continue
+                    
+                    # Merge line info into defect row
+                    line_info = po_to_line_map[po_code]
+                    for key, value in line_info.items():
+                        if value and key not in row:
+                            row[key] = value
+                    enriched_count += 1
+                
+                logger.info(f"Enriched {enriched_count}/{len(defect_rows)} defect rows with line info")
+                
+        except Exception as e:
+            logger.warning(f"Failed to enrich defect data with line info: {e}", exc_info=True)
+            # Don't fail the whole query if enrichment fails
+            return
+    
+    def _build_po_search_url(self, execution_plan: Dict[str, Any]) -> str:
+        """Build production order search URL based on base URL configuration."""
+        env_base = self._resolve_base_url(execution_plan)
+        env_prefix = os.getenv("EXTERNAL_API_PREFIX", "")
+        if env_base:
+            prefix = env_prefix.rstrip("/")
+            return f"{env_base.rstrip('/')}{prefix}/productionOrder/search"
+        else:
+            return self.base_url.replace("/report", "/productionOrder/search")
+    
+    def _get_nested_value(self, obj: Dict[str, Any], path: str) -> Any:
+        """Get nested value from dict using dot notation (e.g., 'line.code')."""
+        if not isinstance(obj, dict):
+            return None
+        keys = path.split(".")
+        value = obj
+        for key in keys:
+            if not isinstance(value, dict):
+                return None
+            value = value.get(key)
+            if value is None:
+                return None
+        return value
+

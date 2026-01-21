@@ -354,3 +354,170 @@ metrics:
     depends_on:
       - defect_count
       - actual_production_qty
+  # -----------------------------
+  # Productivity & Efficiency Metrics
+  # -----------------------------
+  productivity_per_hour:
+    canonical: productivity_per_hour
+    synonyms:
+      - năng suất giờ
+      - nang suat gio
+      - productivity per hour
+      - output per hour
+      - hourly productivity
+    unit: pcs/hour
+    entity: production
+    precision: 2
+    formula: "actual_production_qty / working_hours"
+    depends_on:
+      - actual_production_qty
+      - working_hours
+  
+  efficiency_rate:
+    canonical: efficiency_rate
+    synonyms:
+      - hiệu suất
+      - hieu suat
+      - efficiency
+      - efficiency rate
+      - operational efficiency
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "(actual_production_qty / plan_qty) * 100"
+    depends_on:
+      - actual_production_qty
+      - plan_qty
+  
+  # -----------------------------
+  # OEE (Overall Equipment Effectiveness)
+  # -----------------------------
+  availability_rate:
+    canonical: availability_rate
+    synonyms:
+      - tỷ lệ khả dụng
+      - ty le kha dung
+      - availability
+      - availability rate
+      - uptime rate
+    unit: percent
+    entity: production
+    precision: 2
+    missing_as_zero: false
+  
+  performance_rate:
+    canonical: performance_rate
+    synonyms:
+      - tỷ lệ hiệu suất
+      - performance
+      - performance rate
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "(actual_production_qty / plan_qty) * 100"
+    depends_on:
+      - actual_production_qty
+      - plan_qty
+  
+  quality_rate:
+    canonical: quality_rate
+    synonyms:
+      - tỷ lệ chất lượng
+      - ty le chat luong
+      - quality rate
+      - quality
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "((actual_production_qty - defect_count) / actual_production_qty) * 100"
+    depends_on:
+      - actual_production_qty
+      - defect_count
+  
+  oee:
+    canonical: oee
+    synonyms:
+      - oee
+      - overall equipment effectiveness
+      - hiệu suất tổng thể
+      - hieu suat tong the
+    unit: percent
+    entity: production
+    precision: 2
+    formula: "(performance_rate * quality_rate) / 100"
+    depends_on:
+      - performance_rate
+      - quality_rate
+
+  # -----------------------------
+  # Downtime & Loss Metrics
+  # -----------------------------
+  downtime_hours:
+    canonical: downtime_hours
+    synonyms:
+      - thời gian dừng
+      - thoi gian dung
+      - downtime
+      - downtime hours
+      - machine downtime
+      - line downtime
+    unit: hours
+    entity: production
+    precision: 2
+    missing_as_zero: true
+  
+  total_loss_qty:
+    canonical: total_loss_qty
+    synonyms:
+      - tổng lượng mất
+      - tong luong mat
+      - total loss
+      - loss quantity
+      - waste quantity
+    unit: pcs
+    entity: production
+    precision: 0
+    formula: "defect_count + scrap_qty"
+    depends_on:
+      - defect_count
+      - scrap_qty
+  
+  scrap_qty:
+    canonical: scrap_qty
+    synonyms:
+      - hàng phế
+      - hang phe
+      - scrap
+      - scrap quantity
+      - waste
+    unit: pcs
+    entity: defect
+    precision: 0
+    missing_as_zero: true
+
+  # -----------------------------
+  # Cycle Time & Takt Time
+  # -----------------------------
+  avg_cycle_time:
+    canonical: avg_cycle_time
+    synonyms:
+      - thời gian chu kỳ
+      - cycle time
+      - average cycle time
+      - avg cycle time
+    unit: seconds
+    entity: production
+    precision: 2
+    missing_as_zero: false
+  
+  takt_time:
+    canonical: takt_time
+    synonyms:
+      - thời gian takt
+      - takt time
+      - tact time
+      - average takt time
+    unit: seconds
+    entity: production
+    precision: 2
+    missing_as_zero: false
