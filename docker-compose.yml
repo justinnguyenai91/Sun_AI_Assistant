@@ -1,6 +1,6 @@
 services:
   frontend:
-    build: ./Frontend
+    image: dthausdockerhub/aichatbox:sun-frontend
     container_name: sun_frontend
     ports:
       - "18081:80"
@@ -8,7 +8,7 @@ services:
       - backend
 
   backend:
-    build: ./Backend
+    image: dthausdockerhub/aichatbox:sun-backend
     container_name: sun_backend
     ports:
       - "19000:9000"
@@ -29,7 +29,7 @@ services:
       - postgres
 
   model:
-    image: sun-model:latest
+    image: dthausdockerhub/aichatbox:sun-model
     container_name: sun_model
     ports:
       - "18080:8080"
@@ -43,7 +43,7 @@ services:
       -c 4096
 
   redis:
-    image: sun-redis:latest
+    image: dthausdockerhub/aichatbox:sun-redis
     container_name: sun_redis
     ports:
       - "16379:6379"
@@ -57,7 +57,7 @@ services:
       retries: 5
 
   postgres:
-    image: sun-postgres:latest
+    image: dthausdockerhub/aichatbox:sun-postgres
     container_name: sun_postgres
     ports:
       - "15432:5432"
