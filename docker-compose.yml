@@ -3,7 +3,7 @@ services:
     build: ./Frontend
     container_name: sun_frontend
     ports:
-      - "8081:80"
+      - "18081:80"
     depends_on:
       - backend
 
@@ -11,7 +11,7 @@ services:
     build: ./Backend
     container_name: sun_backend
     ports:
-      - "9000:9000"
+      - "19000:9000"
     env_file:
       - ./Backend/.env.docker
     volumes:
@@ -29,10 +29,10 @@ services:
       - postgres
 
   model:
-    image: ghcr.io/ggml-org/llama.cpp:full
+    image: sun-model:latest
     container_name: sun_model
     ports:
-      - "8080:8080"
+      - "18080:8080"
     volumes:
       - ./Model:/models
     command: >
@@ -43,10 +43,10 @@ services:
       -c 4096
 
   redis:
-    image: redis:7-alpine
+    image: sun-redis:latest
     container_name: sun_redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -57,10 +57,10 @@ services:
       retries: 5
 
   postgres:
-    image: postgres:16-alpine
+    image: sun-postgres:latest
     container_name: sun_postgres
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       POSTGRES_DB: sun_mes
       POSTGRES_USER: sun_user
